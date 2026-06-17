@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useAtom } from 'jotai';
 import { useMutation, useQuery } from 'convex/react';
 import { FunctionReturnType } from 'convex/server';
-import { ArrowLeft, Check, ExternalLink, RotateCcw, Shuffle, Undo2, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, ExternalLink, RotateCcw, Shuffle, Undo2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/convex/_generated/api';
 import type { Id } from '@/types';
@@ -89,6 +89,8 @@ export default function AuctionConsolePage({ params }: { params: Promise<{ tourn
 
       {state.phase === 'bidding' ? (
         <ActiveLot tournamentId={id} state={state} />
+      ) : state.phase === 'result' ? (
+        <ResultLot tournamentId={id} state={state} />
       ) : (
         <SelectPlayer tournamentId={id} />
       )}
@@ -281,6 +283,90 @@ function ActiveLot({ tournamentId, state }: { tournamentId: Id<'tournaments'>; s
             );
           })}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function ResultLot({ tournamentId, state }: { tournamentId: Id<'tournaments'>; state: ConsoleState }) {
+  const nextLot = useMutation(api.auction.nextLot);
+  const undoSold = useMutation(api.auction.undoSold);
+
+  const player = state.activePlayer;
+  if (!player) return <Spinner />;
+  const sold = player.status === 'sold';
+  const team = state.teams.find((t) => t._id === player.soldToTeamId);
+
+  async function next() {
+    try {
+      await nextLot({ tournamentId });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not advance');
+    }
+  }
+
+  return (
+    <div className="grid gap-5 lg:grid-cols-[1fr_1.15fr]">
+      {/* Resolved lot */}
+      <Card className="flex flex-col gap-5 p-6">
+        <div className="flex items-center gap-4">
+          <AvatarImage src={player.imageUrl} name={player.name} className="size-20 rounded-2xl text-3xl" />
+          <div>
+            <p className="eyebrow">{sold ? 'Sold' : 'Unsold'}</p>
+            <h2 className="display text-3xl">{player.name}</h2>
+            <p className="text-sm text-muted-foreground">
+              {player.role ? `${player.role} · ` : ''}min {formatAmount(player.minBid)}
+            </p>
+          </div>
+        </div>
+
+        <div
+          className={cn(
+            'rounded-2xl border p-6 text-center',
+            sold ? 'border-positive/40 bg-positive/5' : 'border-destructive/40 bg-destructive/5',
+          )}
+        >
+          {sold ? (
+            <>
+              <p className="eyebrow">Sold to</p>
+              <p className="display my-1 text-3xl">{team?.name ?? 'Unknown team'}</p>
+              <p className="tnum display text-5xl text-positive">{formatAmount(player.soldPrice)}</p>
+            </>
+          ) : (
+            <>
+              <p className="display text-3xl text-destructive">Unsold</p>
+              <p className="mt-1 text-sm text-muted-foreground">No bids were placed for this player.</p>
+            </>
+          )}
+        </div>
+
+        {sold && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="self-start text-muted-foreground"
+            onClick={() => {
+              if (confirm(`Undo the sale of ${player.name}? The player returns to the pool and the team is refunded.`)) {
+                void undoSold({ tournamentId, playerId: player._id })
+                  .then(() => toast.success('Sale undone'))
+                  .catch((e) => toast.error(e instanceof Error ? e.message : 'Could not undo'));
+              }
+            }}
+          >
+            <Undo2 className="size-4" /> Undo sale
+          </Button>
+        )}
+      </Card>
+
+      {/* Advance */}
+      <div className="flex flex-col justify-center gap-3">
+        <p className="eyebrow">This player stays on the live screen until you continue</p>
+        <Button size="xl" onClick={() => void next()}>
+          <ArrowRight className="size-5" /> Next player
+        </Button>
+        <p className="text-xs text-muted-foreground">
+          You&apos;ll then reveal a random player or pick the next one from the list.
+        </p>
       </div>
     </div>
   );

@@ -89,7 +89,9 @@ export default defineSchema({
     currentBid: v.optional(v.number()),
     leadingTeamId: v.optional(v.id('teams')),
     bidCount: v.number(),
-    phase: v.union(v.literal('idle'), v.literal('bidding')),
+    // 'result' keeps a just-sold/unsold player on screen (console + live) until
+    // the auctioneer advances to the next lot.
+    phase: v.union(v.literal('idle'), v.literal('bidding'), v.literal('result')),
   }).index('by_tournament', ['tournamentId']),
 
   // Append-only bid history (a child table, never an array on a doc).

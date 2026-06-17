@@ -11,6 +11,7 @@ import { Wordmark } from '@/components/Wordmark';
 import { cn } from '@/lib/utils';
 
 type Ticker = Extract<FunctionReturnType<typeof api.auction.liveTicker>, { phase: 'bidding' }>;
+type ResultTicker = Extract<FunctionReturnType<typeof api.auction.liveTicker>, { phase: 'result' }>;
 type Board = Extract<FunctionReturnType<typeof api.auction.liveBoard>, { valid: true }>;
 type Team = Board['teams'][number];
 
@@ -37,7 +38,6 @@ function LiveScreen() {
 
   // Firepower order: who still has the most to spend leads the board.
   const teams = [...board.teams].sort((a, b) => b.remainingBudget - a.remainingBudget);
-  const bidding = ticker.phase === 'bidding';
 
   return (
     <div className="mx-auto min-h-screen max-w-7xl px-5 py-6 sm:px-8 lg:py-10">
@@ -52,9 +52,14 @@ function LiveScreen() {
         <LivePill />
       </header>
 
-      {bidding ? (
+      {ticker.phase === 'bidding' ? (
         <div className="grid gap-5 lg:grid-cols-[1.55fr_1fr]">
           <ActivePanel ticker={ticker} />
+          <Standings teams={teams} rosterSize={board.rosterSize} />
+        </div>
+      ) : ticker.phase === 'result' ? (
+        <div className="grid gap-5 lg:grid-cols-[1.55fr_1fr]">
+          <ResultPanel ticker={ticker} />
           <Standings teams={teams} rosterSize={board.rosterSize} />
         </div>
       ) : (
@@ -125,6 +130,65 @@ function ActivePanel({ ticker }: { ticker: Ticker }) {
           <p className="mt-5 text-lg text-muted-foreground">Awaiting first bid…</p>
         )}
       </div>
+    </section>
+  );
+}
+
+function ResultPanel({ ticker }: { ticker: ResultTicker }) {
+  return (
+    <section
+      key={`result-${ticker.player?.name ?? 'lot'}`}
+      className={cn(
+        'animate-rise flex flex-col rounded-3xl border bg-surface p-6 sm:p-8 lg:p-10',
+        ticker.sold ? 'border-positive/40' : 'border-destructive/40',
+      )}
+    >
+      <div className="flex items-center gap-5">
+        <AvatarImage
+          src={ticker.player?.imageUrl}
+          name={ticker.player?.name ?? '?'}
+          className="size-24 rounded-2xl text-5xl sm:size-28"
+        />
+        <div className="min-w-0">
+          <p className={cn('eyebrow', ticker.sold ? 'text-positive' : 'text-destructive')}>
+            {ticker.sold ? 'Sold' : 'Unsold'}
+          </p>
+          <h2 className="display mt-1.5 truncate text-4xl sm:text-5xl lg:text-6xl">
+            {ticker.player?.name}
+          </h2>
+          <p className="mt-2 text-muted-foreground">
+            {ticker.player?.role ? `${ticker.player.role} · ` : ''}
+            Min {formatAmount(ticker.player?.minBid)}
+          </p>
+        </div>
+      </div>
+
+      <div className="my-8 h-px bg-border lg:my-10" />
+
+      {ticker.sold ? (
+        <div>
+          <p className="eyebrow">Sold for</p>
+          <p className="tnum display my-1 animate-bid-pop text-7xl text-positive sm:text-8xl lg:text-9xl">
+            {formatAmount(ticker.soldPrice)}
+          </p>
+          {ticker.soldTeam && (
+            <div className="mt-5 inline-flex items-center gap-3 rounded-full border border-positive/40 bg-positive/5 py-2 pl-2 pr-4">
+              <AvatarImage
+                src={ticker.soldTeam.logoUrl}
+                name={ticker.soldTeam.name}
+                className="size-8 rounded-lg"
+              />
+              <span className="font-semibold">{ticker.soldTeam.name}</span>
+              <span className="text-xs font-bold uppercase tracking-[0.16em] text-positive">winner</span>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div>
+          <p className="display text-6xl text-destructive sm:text-7xl">Unsold</p>
+          <p className="mt-3 text-lg text-muted-foreground">No bids were placed for this player.</p>
+        </div>
+      )}
     </section>
   );
 }

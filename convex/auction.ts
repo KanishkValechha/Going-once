@@ -44,6 +44,16 @@ async function activeLot(ctx: QueryCtx | MutationCtx, state: AuctionState) {
   return await ctx.db.get('players', state.activePlayerId);
 }
 
+/**
+ * The player currently shown on screen — either being bid on (`bidding`) or
+ * just resolved and awaiting the auctioneer's "Next" (`result`). Returns null
+ * (idle) if the active player dangles, mirroring `activeLot`'s safety.
+ */
+async function displayedLot(ctx: QueryCtx | MutationCtx, state: AuctionState) {
+  if ((state.phase !== 'bidding' && state.phase !== 'result') || !state.activePlayerId) return null;
+  return await ctx.db.get('players', state.activePlayerId);
+}
+
 // ---------------------------------------------------------------------------
 // Admin: auction control console
 // ---------------------------------------------------------------------------
@@ -233,18 +243,19 @@ export const markSold = mutation({
       remainingBudget: team.remainingBudget - state.currentBid,
       playersWon: team.playersWon + 1,
     });
+    // Hold the resolved player on screen (sale info lives on the player doc)
+    // until the auctioneer advances with `nextLot`.
     await ctx.db.patch('auctionState', state._id, {
-      activePlayerId: undefined,
       currentBid: undefined,
       leadingTeamId: undefined,
       bidCount: 0,
-      phase: 'idle',
+      phase: 'result',
     });
     return null;
   },
 });
 
-/** Mark the active lot unsold and clear the floor so it can be re-auctioned later. */
+/** Mark the active lot unsold. The player stays on screen until the next lot. */
 export const markUnsold = mutation({
   args: { tournamentId: v.id('tournaments') },
   handler: async (ctx, args) => {
@@ -253,6 +264,26 @@ export const markUnsold = mutation({
     const player = await activeLot(ctx, state);
     if (!player) throw new Error('No active lot');
     await ctx.db.patch('players', player._id, { status: 'unsold' });
+    await ctx.db.patch('auctionState', state._id, {
+      currentBid: undefined,
+      leadingTeamId: undefined,
+      bidCount: 0,
+      phase: 'result',
+    });
+    return null;
+  },
+});
+
+/**
+ * Clear a resolved lot and return to the picker (idle). Called by the console's
+ * "Next player" flow when the auctioneer wants to choose the next lot manually.
+ */
+export const nextLot = mutation({
+  args: { tournamentId: v.id('tournaments') },
+  handler: async (ctx, args) => {
+    await requireTournamentAccess(ctx, args.tournamentId);
+    const state = await requireState(ctx, args.tournamentId);
+    if (state.phase !== 'result') return null;
     await ctx.db.patch('auctionState', state._id, {
       activePlayerId: undefined,
       currentBid: undefined,
@@ -286,6 +317,20 @@ export const undoSold = mutation({
       soldToTeamId: undefined,
       soldPrice: undefined,
     });
+
+    // If this player is the one currently held on screen (just sold, awaiting
+    // "Next"), drop back to the picker so the console doesn't show a stale
+    // result for a player that's now back in the pool.
+    const state = await getState(ctx, args.tournamentId);
+    if (state && state.activePlayerId === args.playerId) {
+      await ctx.db.patch('auctionState', state._id, {
+        activePlayerId: undefined,
+        currentBid: undefined,
+        leadingTeamId: undefined,
+        bidCount: 0,
+        phase: 'idle',
+      });
+    }
     return null;
   },
 });
@@ -393,15 +438,17 @@ export const consoleState = query({
       rosterByTeam.set(p.soldToTeamId, list);
     }
 
-    // Trust the live lot, not the raw phase: if the active player dangles (left
-    // over from a prior session or deleted mid-lot), the console treats the
-    // auction as idle so it falls back to the picker instead of hanging.
-    const liveLot = state ? await activeLot(ctx, state) : null;
-    const activePlayer = liveLot
+    // Trust the displayed lot, not the raw phase: if the active player dangles
+    // (left over from a prior session or deleted mid-lot), the console treats
+    // the auction as idle so it falls back to the picker instead of hanging.
+    const displayed = state ? await displayedLot(ctx, state) : null;
+    const isBidding = displayed !== null && state?.phase === 'bidding';
+    const isResult = displayed !== null && state?.phase === 'result';
+    const activePlayer = displayed
       ? {
-          ...liveLot,
-          minBid: playerMinBid(tournament, liveLot),
-          imageUrl: liveLot.imageStorageId ? await ctx.storage.getUrl(liveLot.imageStorageId) : null,
+          ...displayed,
+          minBid: playerMinBid(tournament, displayed),
+          imageUrl: displayed.imageStorageId ? await ctx.storage.getUrl(displayed.imageStorageId) : null,
         }
       : null;
 
@@ -415,10 +462,10 @@ export const consoleState = query({
 
     return {
       tournament,
-      phase: liveLot ? ('bidding' as const) : ('idle' as const),
-      currentBid: liveLot ? state?.currentBid ?? null : null,
-      leadingTeamId: liveLot ? state?.leadingTeamId ?? null : null,
-      bidCount: liveLot ? state?.bidCount ?? 0 : 0,
+      phase: isBidding ? ('bidding' as const) : isResult ? ('result' as const) : ('idle' as const),
+      currentBid: isBidding ? state?.currentBid ?? null : null,
+      leadingTeamId: isBidding ? state?.leadingTeamId ?? null : null,
+      bidCount: isBidding ? state?.bidCount ?? 0 : 0,
       activePlayer,
       teamsFull,
       teamCount: teams.length,
@@ -448,20 +495,43 @@ export const liveTicker = query({
     const tournament = await resolveViewer(ctx, args.token);
     if (!tournament) return { phase: 'invalid' as const };
     const state = await getState(ctx, tournament._id);
-    const player = state ? await activeLot(ctx, state) : null;
+    const player = state ? await displayedLot(ctx, state) : null;
     if (!state || !player) {
       return { phase: 'idle' as const };
     }
+    const playerPayload = {
+      name: player.name,
+      role: player.role ?? null,
+      minBid: playerMinBid(tournament, player),
+      imageUrl: player.imageStorageId ? await ctx.storage.getUrl(player.imageStorageId) : null,
+    };
+
+    // Resolved lot held on screen: show the sold/unsold outcome until the
+    // auctioneer advances to the next player.
+    if (state.phase === 'result') {
+      const soldTeam =
+        player.status === 'sold' && player.soldToTeamId
+          ? await ctx.db.get('teams', player.soldToTeamId)
+          : null;
+      return {
+        phase: 'result' as const,
+        player: playerPayload,
+        sold: player.status === 'sold',
+        soldPrice: player.soldPrice ?? null,
+        soldTeam: soldTeam
+          ? {
+              name: soldTeam.name,
+              logoUrl: soldTeam.logoStorageId ? await ctx.storage.getUrl(soldTeam.logoStorageId) : null,
+            }
+          : null,
+      };
+    }
+
     const leadingTeam = state.leadingTeamId ? await ctx.db.get('teams', state.leadingTeamId) : null;
     return {
       phase: 'bidding' as const,
       currentBid: state.currentBid ?? null,
-      player: {
-        name: player.name,
-        role: player.role ?? null,
-        minBid: playerMinBid(tournament, player),
-        imageUrl: player.imageStorageId ? await ctx.storage.getUrl(player.imageStorageId) : null,
-      },
+      player: playerPayload,
       leadingTeam: leadingTeam
         ? {
             name: leadingTeam.name,
