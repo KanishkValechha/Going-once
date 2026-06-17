@@ -54,11 +54,7 @@ export default function AdminHome() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {tournaments.map((t, i) => (
             <Link key={t._id} href={`/admin/${t._id}`} style={{ animationDelay: `${i * 45}ms` }} className="animate-rise">
-              <Card className="group relative h-full overflow-hidden p-5 transition-all hover:-translate-y-1 hover:border-accent/60">
-                <div
-                  className="pointer-events-none absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-accent/0 to-transparent transition-colors group-hover:via-accent/60"
-                  aria-hidden
-                />
+              <Card className="group h-full p-5 transition-all hover:-translate-y-1 hover:border-accent/60">
                 <div className="mb-4 flex items-start justify-between gap-3">
                   <h3 className="display text-2xl leading-none">{t.name}</h3>
                   <Badge variant={statusVariant[t.status]}>

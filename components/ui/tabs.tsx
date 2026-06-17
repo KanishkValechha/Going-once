@@ -44,7 +44,7 @@ function TabsTrigger({
       className={cn(
         'inline-flex items-center justify-center gap-1.5 rounded-lg px-3.5 py-1.5 text-sm font-semibold whitespace-nowrap text-muted-foreground transition-all outline-none',
         'hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50',
-        'data-[state=active]:bg-accent data-[state=active]:text-accent-foreground data-[state=active]:shadow-[0_4px_18px_-6px_color-mix(in_oklch,var(--accent)_60%,transparent)]',
+        'data-[state=active]:bg-accent data-[state=active]:text-accent-foreground',
         "[&_svg]:size-4 [&_svg]:shrink-0 disabled:pointer-events-none disabled:opacity-50",
         className,
       )}

@@ -53,11 +53,7 @@ function LiveScreen() {
         </div>
       ) : (
         <div className="flex flex-col gap-6">
-          <div className="relative flex flex-col items-center gap-3 overflow-hidden rounded-3xl border border-border bg-surface py-20 text-center">
-            <div
-              className="pointer-events-none absolute -top-24 left-1/2 h-56 w-96 -translate-x-1/2 rounded-full bg-accent/15 blur-3xl"
-              aria-hidden
-            />
+          <div className="flex flex-col items-center gap-3 rounded-3xl border border-border bg-surface py-20 text-center">
             <span className="flex gap-1.5">
               {[0, 1, 2].map((i) => (
                 <span
@@ -78,12 +74,8 @@ function LiveScreen() {
 
 function ActivePanel({ ticker }: { ticker: Ticker }) {
   return (
-    <div className="relative flex flex-col gap-8 overflow-hidden rounded-3xl border border-border bg-surface p-8 lg:p-10">
-      <div
-        className="pointer-events-none absolute -top-32 left-1/2 h-72 w-[36rem] -translate-x-1/2 rounded-full bg-accent/20 blur-[100px]"
-        aria-hidden
-      />
-      <div className="relative flex items-center gap-6">
+    <div className="flex flex-col gap-8 rounded-3xl border border-border bg-surface p-8 lg:p-10">
+      <div className="flex items-center gap-6">
         <AvatarImage
           src={ticker.player?.imageUrl}
           name={ticker.player?.name ?? '?'}

@@ -134,11 +134,7 @@ function ActiveLot({ tournamentId, state }: { tournamentId: Id<'tournaments'>; s
   return (
     <div className="grid gap-5 lg:grid-cols-[1fr_1.15fr]">
       {/* Active lot */}
-      <Card className="relative flex flex-col gap-5 overflow-hidden p-6">
-        <div
-          className="pointer-events-none absolute -top-24 left-1/2 h-48 w-48 -translate-x-1/2 rounded-full bg-accent/20 blur-3xl"
-          aria-hidden
-        />
+      <Card className="flex flex-col gap-5 p-6">
         <div className="flex items-center gap-4">
           <AvatarImage src={player.imageUrl} name={player.name} className="size-20 rounded-2xl text-3xl" />
           <div>
@@ -239,7 +235,7 @@ function ActiveLot({ tournamentId, state }: { tournamentId: Id<'tournaments'>; s
                 className={cn(
                   'flex flex-col items-start gap-0.5 rounded-xl border p-4 text-left transition-all active:scale-[0.98]',
                   isLeading
-                    ? 'border-accent bg-accent/10 shadow-[0_0_28px_-8px_color-mix(in_oklch,var(--accent)_60%,transparent)]'
+                    ? 'border-accent bg-accent/10'
                     : cannotAfford
                       ? 'cursor-not-allowed border-destructive/30 bg-destructive/5 opacity-60'
                       : 'border-border bg-surface hover:-translate-y-0.5 hover:border-accent/60',
@@ -287,11 +283,7 @@ function SelectPlayer({ tournamentId }: { tournamentId: Id<'tournaments'> }) {
 
   return (
     <div className="flex flex-col gap-6">
-      <Card className="relative flex flex-col items-center gap-4 overflow-hidden p-10 text-center">
-        <div
-          className="pointer-events-none absolute -top-20 left-1/2 h-48 w-72 -translate-x-1/2 rounded-full bg-accent/15 blur-3xl"
-          aria-hidden
-        />
+      <Card className="flex flex-col items-center gap-4 p-10 text-center">
         <p className="display text-2xl">No active lot</p>
         <p className="max-w-sm text-sm text-muted-foreground">
           Reveal the next player at random for some drama, or pick one manually below.

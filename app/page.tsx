@@ -11,12 +11,8 @@ import { Wordmark } from '@/components/Wordmark';
 
 export default function Home() {
   return (
-    <main className="relative mx-auto flex min-h-screen max-w-3xl flex-col items-center justify-center gap-12 px-6 py-16">
-      <div
-        className="pointer-events-none absolute top-0 left-1/2 h-96 w-[40rem] -translate-x-1/2 rounded-full bg-accent/15 blur-[120px]"
-        aria-hidden
-      />
-      <div className="relative flex flex-col items-center text-center">
+    <main className="mx-auto flex min-h-screen max-w-3xl flex-col items-center justify-center gap-12 px-6 py-16">
+      <div className="flex flex-col items-center text-center">
         <Wordmark size="lg" />
         <h1 className="display mt-8 text-6xl tracking-tight sm:text-7xl">
           Live Auction

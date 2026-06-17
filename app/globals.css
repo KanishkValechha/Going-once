@@ -25,12 +25,12 @@
 
   --border: oklch(0.3 0.016 264);
   --input: oklch(0.3 0.016 264);
-  --ring: oklch(0.62 0.19 277);
+  --ring: oklch(0.62 0.17 252);
 
-  /* Signature accent — calm, confident indigo. */
-  --accent: oklch(0.62 0.19 277);
+  /* Signature accent — calm, confident blue. */
+  --accent: oklch(0.62 0.17 252);
   --accent-foreground: oklch(0.99 0 0);
-  --primary: oklch(0.62 0.19 277);
+  --primary: oklch(0.62 0.17 252);
   --primary-foreground: oklch(0.99 0 0);
   --secondary: oklch(0.255 0.016 264);
   --secondary-foreground: oklch(0.96 0.004 264);
@@ -95,12 +95,6 @@
   body {
     color: var(--foreground);
     background-color: var(--background);
-    background-image: radial-gradient(
-      55rem 38rem at 50% -18%,
-      color-mix(in oklch, var(--accent) 7%, transparent),
-      transparent 62%
-    );
-    background-attachment: fixed;
     font-family: var(--font-sans), system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
   }

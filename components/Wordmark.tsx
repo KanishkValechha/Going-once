@@ -16,7 +16,7 @@ export function Wordmark({
     <div className={cn('flex items-center gap-2.5', className)}>
       <span
         className={cn(
-          'flex items-center justify-center rounded-lg bg-accent text-accent-foreground shadow-[0_0_24px_-6px_color-mix(in_oklch,var(--accent)_70%,transparent)]',
+          'flex items-center justify-center rounded-lg bg-accent text-accent-foreground',
           size === 'sm' ? 'size-7' : 'size-10',
         )}
       >
