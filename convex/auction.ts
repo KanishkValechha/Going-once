@@ -29,6 +29,21 @@ async function requireState(ctx: MutationCtx, tournamentId: Id<'tournaments'>) {
   return state;
 }
 
+type AuctionState = NonNullable<Awaited<ReturnType<typeof getState>>>;
+
+/**
+ * Resolve the player genuinely on the block. The invariant we enforce here is
+ * `phase === 'bidding'` ⟺ a real, still-existing active player. If a lot was
+ * left mid-bid in a prior session, or the active player was deleted out from
+ * under the state, `activePlayerId` may dangle — in that case the auction is
+ * treated as idle so a stale row can never strand the console or show a phantom
+ * bid on the live screen.
+ */
+async function activeLot(ctx: QueryCtx | MutationCtx, state: AuctionState) {
+  if (state.phase !== 'bidding' || !state.activePlayerId) return null;
+  return await ctx.db.get('players', state.activePlayerId);
+}
+
 // ---------------------------------------------------------------------------
 // Admin: auction control console
 // ---------------------------------------------------------------------------
@@ -39,7 +54,7 @@ export const selectPlayer = mutation({
   handler: async (ctx, args) => {
     await requireTournamentAccess(ctx, args.tournamentId);
     const state = await requireState(ctx, args.tournamentId);
-    if (state.phase === 'bidding') throw new Error('Finish the current lot before selecting another');
+    if (await activeLot(ctx, state)) throw new Error('Finish the current lot before selecting another');
     const player = await ctx.db.get('players', args.playerId);
     if (!player || player.tournamentId !== args.tournamentId) throw new Error('Player not found');
     if (player.status === 'sold') throw new Error('Player already sold');
@@ -65,7 +80,7 @@ export const selectRandomPlayer = mutation({
   handler: async (ctx, args) => {
     await requireTournamentAccess(ctx, args.tournamentId);
     const state = await requireState(ctx, args.tournamentId);
-    if (state.phase === 'bidding') throw new Error('Finish the current lot before selecting another');
+    if (await activeLot(ctx, state)) throw new Error('Finish the current lot before selecting another');
 
     const available = await ctx.db
       .query('players')
@@ -103,7 +118,8 @@ export const placeBid = mutation({
   handler: async (ctx, args) => {
     await requireTournamentAccess(ctx, args.tournamentId);
     const state = await requireState(ctx, args.tournamentId);
-    if (state.phase !== 'bidding' || !state.activePlayerId) {
+    const player = await activeLot(ctx, state);
+    if (!player) {
       throw new Error('No active lot to bid on');
     }
     // Idempotency guard: a stale/duplicate click is silently ignored.
@@ -111,8 +127,6 @@ export const placeBid = mutation({
       return { ignored: true as const, currentBid: state.currentBid, bidCount: state.bidCount };
     }
 
-    const player = await ctx.db.get('players', state.activePlayerId);
-    if (!player) throw new Error('Active player missing');
     const tournament = await ctx.db.get('tournaments', args.tournamentId);
     if (!tournament) throw new Error('Tournament missing');
 
@@ -143,7 +157,7 @@ export const placeBid = mutation({
     });
     await ctx.db.insert('bids', {
       tournamentId: args.tournamentId,
-      playerId: state.activePlayerId,
+      playerId: player._id,
       teamId: args.teamId,
       amount,
       seq: newBidCount,
@@ -159,9 +173,10 @@ export const undoBid = mutation({
   handler: async (ctx, args) => {
     await requireTournamentAccess(ctx, args.tournamentId);
     const state = await requireState(ctx, args.tournamentId);
-    if (state.phase !== 'bidding' || !state.activePlayerId) return null;
+    const player = await activeLot(ctx, state);
+    if (!player) return null;
 
-    const playerId = state.activePlayerId;
+    const playerId = player._id;
     let toUndo: Id<'bids'> | null = null;
     let newLeaderAmount: number | undefined = undefined;
     let newLeaderTeam: Id<'teams'> | undefined = undefined;
@@ -195,15 +210,15 @@ export const markSold = mutation({
   handler: async (ctx, args) => {
     await requireTournamentAccess(ctx, args.tournamentId);
     const state = await requireState(ctx, args.tournamentId);
-    if (state.phase !== 'bidding' || !state.activePlayerId) throw new Error('No active lot');
+    const player = await activeLot(ctx, state);
+    if (!player) throw new Error('No active lot');
     if (!state.leadingTeamId || state.currentBid === undefined) {
       throw new Error('No bids placed — mark unsold instead');
     }
 
-    const player = await ctx.db.get('players', state.activePlayerId);
     const team = await ctx.db.get('teams', state.leadingTeamId);
     const tournament = await ctx.db.get('tournaments', args.tournamentId);
-    if (!player || !team || !tournament) throw new Error('Auction data missing');
+    if (!team || !tournament) throw new Error('Auction data missing');
     if (!canTeamAfford(team, tournament, state.currentBid)) {
       throw new Error('Winning team cannot afford this bid given its remaining roster slots');
     }
@@ -234,8 +249,9 @@ export const markUnsold = mutation({
   handler: async (ctx, args) => {
     await requireTournamentAccess(ctx, args.tournamentId);
     const state = await requireState(ctx, args.tournamentId);
-    if (state.phase !== 'bidding' || !state.activePlayerId) throw new Error('No active lot');
-    await ctx.db.patch('players', state.activePlayerId, { status: 'unsold' });
+    const player = await activeLot(ctx, state);
+    if (!player) throw new Error('No active lot');
+    await ctx.db.patch('players', player._id, { status: 'unsold' });
     await ctx.db.patch('auctionState', state._id, {
       activePlayerId: undefined,
       currentBid: undefined,
@@ -302,16 +318,16 @@ export const consoleState = query({
       rosterByTeam.set(p.soldToTeamId, list);
     }
 
-    let activePlayer = null;
-    if (state?.activePlayerId) {
-      const p = await ctx.db.get('players', state.activePlayerId);
-      if (p) {
-        activePlayer = {
-          ...p,
-          imageUrl: p.imageStorageId ? await ctx.storage.getUrl(p.imageStorageId) : null,
-        };
-      }
-    }
+    // Trust the live lot, not the raw phase: if the active player dangles (left
+    // over from a prior session or deleted mid-lot), the console treats the
+    // auction as idle so it falls back to the picker instead of hanging.
+    const liveLot = state ? await activeLot(ctx, state) : null;
+    const activePlayer = liveLot
+      ? {
+          ...liveLot,
+          imageUrl: liveLot.imageStorageId ? await ctx.storage.getUrl(liveLot.imageStorageId) : null,
+        }
+      : null;
 
     const teamsFull = teams.filter((t) => t.playersWon >= tournament.rosterSize).length;
     const availableCount = await ctx.db
@@ -323,10 +339,10 @@ export const consoleState = query({
 
     return {
       tournament,
-      phase: state?.phase ?? 'idle',
-      currentBid: state?.currentBid ?? null,
-      leadingTeamId: state?.leadingTeamId ?? null,
-      bidCount: state?.bidCount ?? 0,
+      phase: liveLot ? ('bidding' as const) : ('idle' as const),
+      currentBid: liveLot ? state?.currentBid ?? null : null,
+      leadingTeamId: liveLot ? state?.leadingTeamId ?? null : null,
+      bidCount: liveLot ? state?.bidCount ?? 0 : 0,
       activePlayer,
       teamsFull,
       teamCount: teams.length,
@@ -356,22 +372,20 @@ export const liveTicker = query({
     const tournament = await resolveViewer(ctx, args.token);
     if (!tournament) return { phase: 'invalid' as const };
     const state = await getState(ctx, tournament._id);
-    if (!state || state.phase !== 'bidding' || !state.activePlayerId) {
+    const player = state ? await activeLot(ctx, state) : null;
+    if (!state || !player) {
       return { phase: 'idle' as const };
     }
-    const player = await ctx.db.get('players', state.activePlayerId);
     const leadingTeam = state.leadingTeamId ? await ctx.db.get('teams', state.leadingTeamId) : null;
     return {
       phase: 'bidding' as const,
       currentBid: state.currentBid ?? null,
-      player: player
-        ? {
-            name: player.name,
-            role: player.role ?? null,
-            basePrice: player.basePrice,
-            imageUrl: player.imageStorageId ? await ctx.storage.getUrl(player.imageStorageId) : null,
-          }
-        : null,
+      player: {
+        name: player.name,
+        role: player.role ?? null,
+        basePrice: player.basePrice,
+        imageUrl: player.imageStorageId ? await ctx.storage.getUrl(player.imageStorageId) : null,
+      },
       leadingTeam: leadingTeam
         ? {
             name: leadingTeam.name,

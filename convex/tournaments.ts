@@ -57,6 +57,30 @@ async function ensureAuctionState(ctx: MutationCtx, tournamentId: Id<'tournament
 }
 
 /**
+ * Reset a tournament's auction to a clean idle slate (creating the row if it's
+ * missing). Called when going live so a lot left mid-bid in a prior session
+ * never carries over — sold players and team budgets, which live on their own
+ * rows, are untouched.
+ */
+async function resetAuctionState(ctx: MutationCtx, tournamentId: Id<'tournaments'>) {
+  const existing = await ctx.db
+    .query('auctionState')
+    .withIndex('by_tournament', (q) => q.eq('tournamentId', tournamentId))
+    .unique();
+  if (existing) {
+    await ctx.db.patch('auctionState', existing._id, {
+      activePlayerId: undefined,
+      currentBid: undefined,
+      leadingTeamId: undefined,
+      bidCount: 0,
+      phase: 'idle',
+    });
+  } else {
+    await ctx.db.insert('auctionState', { tournamentId, bidCount: 0, phase: 'idle' });
+  }
+}
+
+/**
  * List the tournaments the caller can manage: super-admins see all, members see
  * only the ones they belong to.
  */
@@ -173,7 +197,7 @@ export const setLive = mutation({
       }
     }
     await ctx.db.patch('tournaments', args.tournamentId, { status: 'live' });
-    await ensureAuctionState(ctx, args.tournamentId);
+    await resetAuctionState(ctx, args.tournamentId);
     return null;
   },
 });

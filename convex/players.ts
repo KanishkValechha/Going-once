@@ -73,6 +73,33 @@ export const remove = mutation({
   args: { playerId: v.id('players') },
   handler: async (ctx, args) => {
     await requireAccessForPlayer(ctx, args.playerId);
+    const player = await ctx.db.get('players', args.playerId);
+    if (!player) return null;
+
+    // If this player is the live lot, clear the auction state — otherwise the
+    // console strands on a deleted active player and the live screen shows a
+    // phantom bid for a lot that no longer exists.
+    const state = await ctx.db
+      .query('auctionState')
+      .withIndex('by_tournament', (q) => q.eq('tournamentId', player.tournamentId))
+      .unique();
+    if (state?.activePlayerId === args.playerId) {
+      await ctx.db.patch('auctionState', state._id, {
+        activePlayerId: undefined,
+        currentBid: undefined,
+        leadingTeamId: undefined,
+        bidCount: 0,
+        phase: 'idle',
+      });
+    }
+
+    // Drop this player's bid history so no orphan bids linger.
+    for await (const b of ctx.db
+      .query('bids')
+      .withIndex('by_player_and_seq', (q) => q.eq('playerId', args.playerId))) {
+      await ctx.db.delete('bids', b._id);
+    }
+
     await ctx.db.delete('players', args.playerId);
     return null;
   },
