@@ -43,6 +43,8 @@ export default function AuctionConsolePage({ params }: { params: Promise<{ tourn
         </Card>
       )}
 
+      <RosterProgress state={state} />
+
       {state.phase === 'bidding' ? (
         <ActiveLot tournamentId={id} state={state} />
       ) : (
@@ -93,6 +95,31 @@ function TeamRosters({
 }
 
 type ConsoleState = NonNullable<FunctionReturnType<typeof api.auction.consoleState>>;
+
+function RosterProgress({ state }: { state: ConsoleState }) {
+  const { teamsFull, teamCount, rostersComplete, availablePlayers } = state;
+  return (
+    <Card
+      className={`flex flex-wrap items-center justify-between gap-2 text-sm ${
+        rostersComplete ? 'border-positive/40' : 'border-border'
+      }`}
+    >
+      <span className="flex items-center gap-2">
+        <Badge tone={rostersComplete ? 'positive' : 'neutral'}>
+          {teamsFull}/{teamCount} rosters full
+        </Badge>
+        {rostersComplete ? (
+          <span className="text-positive">All teams have enough players — you can mark the tournament completed.</span>
+        ) : (
+          <span className="text-muted">Keep the auction going until every team fills its roster.</span>
+        )}
+      </span>
+      {!rostersComplete && availablePlayers === 0 && (
+        <span className="text-warning">No available players left — re-auction the unsold ones to finish rosters.</span>
+      )}
+    </Card>
+  );
+}
 
 function ActiveLot({ tournamentId, state }: { tournamentId: Id<'tournaments'>; state: ConsoleState }) {
   const placeBid = useMutation(api.auction.placeBid);

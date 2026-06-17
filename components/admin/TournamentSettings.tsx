@@ -13,6 +13,7 @@ export function TournamentSettings({ tournament }: { tournament: Tournament }) {
   const complete = useMutation(api.tournaments.complete);
   const regenerate = useMutation(api.tournaments.regenerateViewerToken);
   const readiness = useQuery(api.tournaments.liveReadiness, { tournamentId: tournament._id as Id<'tournaments'> });
+  const liveConsole = useQuery(api.auction.consoleState, { tournamentId: tournament._id as Id<'tournaments'> });
 
   const [name, setName] = useState(tournament.name);
   const [defaultBudget, setDefaultBudget] = useState(String(tournament.defaultBudget));
@@ -45,6 +46,14 @@ export function TournamentSettings({ tournament }: { tournament: Tournament }) {
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Could not go live');
     }
+  }
+
+  async function markCompleted() {
+    if (liveConsole && !liveConsole.rostersComplete) {
+      const msg = `Only ${liveConsole.teamsFull}/${liveConsole.teamCount} teams have full rosters. End the auction anyway?`;
+      if (!confirm(msg)) return;
+    }
+    await complete({ tournamentId: id });
   }
 
   return (
@@ -100,7 +109,7 @@ export function TournamentSettings({ tournament }: { tournament: Tournament }) {
             </Button>
           )}
           {tournament.status === 'live' && (
-            <Button variant="secondary" onClick={() => void complete({ tournamentId: id })}>
+            <Button variant="secondary" onClick={() => void markCompleted()}>
               Mark completed
             </Button>
           )}

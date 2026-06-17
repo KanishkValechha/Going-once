@@ -313,6 +313,14 @@ export const consoleState = query({
       }
     }
 
+    const teamsFull = teams.filter((t) => t.playersWon >= tournament.rosterSize).length;
+    const availableCount = await ctx.db
+      .query('players')
+      .withIndex('by_tournament_and_status', (q) =>
+        q.eq('tournamentId', args.tournamentId).eq('status', 'available'),
+      )
+      .take(1000);
+
     return {
       tournament,
       phase: state?.phase ?? 'idle',
@@ -320,6 +328,10 @@ export const consoleState = query({
       leadingTeamId: state?.leadingTeamId ?? null,
       bidCount: state?.bidCount ?? 0,
       activePlayer,
+      teamsFull,
+      teamCount: teams.length,
+      rostersComplete: teams.length > 0 && teamsFull === teams.length,
+      availablePlayers: availableCount.length,
       teams: teams.map((t) => ({
         ...t,
         maxBid: maxAffordableBid(t, tournament),
