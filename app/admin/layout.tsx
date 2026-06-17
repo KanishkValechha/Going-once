@@ -1,0 +1,72 @@
+'use client';
+
+import Link from 'next/link';
+import { ReactNode } from 'react';
+import { Authenticated, AuthLoading, Unauthenticated, useQuery } from 'convex/react';
+import { useAuth } from '@workos-inc/authkit-nextjs/components';
+import { api } from '@/convex/_generated/api';
+import { Button, Card, Spinner } from '@/components/ui';
+
+export default function AdminLayout({ children }: { children: ReactNode }) {
+  return (
+    <div className="min-h-screen">
+      <AuthLoading>
+        <Spinner />
+      </AuthLoading>
+      <Unauthenticated>
+        <div className="flex min-h-screen items-center justify-center">
+          <Card className="text-center">
+            <p className="mb-3 text-muted">You need to sign in to access the admin portal.</p>
+            <a href="/sign-in">
+              <Button>Sign in</Button>
+            </a>
+          </Card>
+        </div>
+      </Unauthenticated>
+      <Authenticated>
+        <AdminShell>{children}</AdminShell>
+      </Authenticated>
+    </div>
+  );
+}
+
+function AdminShell({ children }: { children: ReactNode }) {
+  const me = useQuery(api.users.currentUser);
+  const { signOut } = useAuth();
+
+  if (me === undefined) return <Spinner />;
+
+  if (me?.role !== 'admin') {
+    return (
+      <div className="flex min-h-screen items-center justify-center px-6">
+        <Card className="max-w-md text-center">
+          <h2 className="mb-2 text-lg font-semibold">Admin access required</h2>
+          <p className="mb-4 text-sm text-muted">
+            {me?.email} isn&apos;t an admin. Ask an organizer to grant your account the admin role.
+          </p>
+          <Button variant="secondary" onClick={() => void signOut()}>
+            Sign out
+          </Button>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <header className="sticky top-0 z-20 flex items-center justify-between border-b border-border bg-background/90 px-6 py-3 backdrop-blur">
+        <Link href="/admin" className="flex items-center gap-2">
+          <span className="text-sm font-semibold uppercase tracking-[0.25em] text-accent">Going Once</span>
+          <span className="text-xs text-muted">Admin</span>
+        </Link>
+        <div className="flex items-center gap-3 text-sm">
+          <span className="text-muted">{me.email}</span>
+          <Button variant="ghost" onClick={() => void signOut()}>
+            Sign out
+          </Button>
+        </div>
+      </header>
+      <main className="mx-auto max-w-6xl px-6 py-8">{children}</main>
+    </>
+  );
+}

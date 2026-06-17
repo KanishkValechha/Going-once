@@ -8,4 +8,11 @@ export default defineConfig([
   ...nextTypescript,
   ...convexPlugin.configs.recommended,
   globalIgnores(['convex/_generated']),
+  {
+    // Player photos and team logos are dynamic, signed Convex storage URLs, so
+    // we render them with plain <img> rather than next/image.
+    rules: {
+      '@next/next/no-img-element': 'off',
+    },
+  },
 ]);

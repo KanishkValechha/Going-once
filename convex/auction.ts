@@ -1,9 +1,20 @@
 import { v } from 'convex/values';
 import { mutation, query, QueryCtx, MutationCtx } from './_generated/server';
 import { Id } from './_generated/dataModel';
-import { requireAdmin, requireViewer } from './lib/auth';
+import { requireAdmin } from './lib/auth';
 import { canTeamAfford, maxAffordableBid } from './lib/budget';
 import { nextBid } from './lib/increment';
+
+/** Resolve a `live` tournament from a viewer token, or null if invalid/inactive. */
+async function resolveViewer(ctx: QueryCtx, token: string) {
+  if (!token) return null;
+  const tournament = await ctx.db
+    .query('tournaments')
+    .withIndex('by_viewerToken', (q) => q.eq('viewerToken', token))
+    .unique();
+  if (!tournament || tournament.status !== 'live') return null;
+  return tournament;
+}
 
 async function getState(ctx: QueryCtx | MutationCtx, tournamentId: Id<'tournaments'>) {
   return await ctx.db
@@ -277,7 +288,8 @@ export const consoleState = query({
 export const liveTicker = query({
   args: { token: v.string() },
   handler: async (ctx, args) => {
-    const tournament = await requireViewer(ctx, args.token);
+    const tournament = await resolveViewer(ctx, args.token);
+    if (!tournament) return { phase: 'invalid' as const };
     const state = await getState(ctx, tournament._id);
     if (!state || state.phase !== 'bidding' || !state.activePlayerId) {
       return { phase: 'idle' as const };
@@ -312,12 +324,14 @@ export const liveTicker = query({
 export const liveBoard = query({
   args: { token: v.string() },
   handler: async (ctx, args) => {
-    const tournament = await requireViewer(ctx, args.token);
+    const tournament = await resolveViewer(ctx, args.token);
+    if (!tournament) return { valid: false as const };
     const teams = await ctx.db
       .query('teams')
       .withIndex('by_tournament', (q) => q.eq('tournamentId', tournament._id))
       .take(100);
     return {
+      valid: true as const,
       tournamentName: tournament.name,
       rosterSize: tournament.rosterSize,
       teams: await Promise.all(
