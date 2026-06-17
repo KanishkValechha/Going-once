@@ -3,7 +3,7 @@
 import { use } from 'react';
 import Link from 'next/link';
 import { useQuery } from 'convex/react';
-import { ArrowLeft, Crown, LayoutDashboard, Radio, Shield, Users, Users2 } from 'lucide-react';
+import { ArrowLeft, Crown, LayoutDashboard, Radio, Shield, Trophy, Users, Users2 } from 'lucide-react';
 import { api } from '@/convex/_generated/api';
 import type { Id } from '@/types';
 import { Badge } from '@/components/ui/badge';
@@ -15,6 +15,8 @@ import { PlayersManager } from '@/components/admin/PlayersManager';
 import { CaptainsManager } from '@/components/admin/CaptainsManager';
 import { TournamentMembers } from '@/components/admin/TournamentMembers';
 import { TournamentOverview } from '@/components/admin/TournamentOverview';
+import { BracketManager } from '@/components/admin/BracketManager';
+import { AuctionExport } from '@/components/admin/AuctionExport';
 
 export default function TournamentHub({ params }: { params: Promise<{ tournamentId: string }> }) {
   const { tournamentId } = use(params);
@@ -70,6 +72,9 @@ export default function TournamentHub({ params }: { params: Promise<{ tournament
           <TabsTrigger value="members">
             <Users className="size-4" /> Members
           </TabsTrigger>
+          <TabsTrigger value="results">
+            <Trophy className="size-4" /> Results
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview">
@@ -86,6 +91,17 @@ export default function TournamentHub({ params }: { params: Promise<{ tournament
         </TabsContent>
         <TabsContent value="members">
           <TournamentMembers tournamentId={id} />
+        </TabsContent>
+        <TabsContent value="results">
+          <div className="flex flex-col gap-8">
+            <div className="grid gap-5 lg:grid-cols-2">
+              <AuctionExport tournamentId={id} />
+            </div>
+            <div>
+              <h2 className="display mb-4 text-2xl">Tournament bracket</h2>
+              <BracketManager tournamentId={id} />
+            </div>
+          </div>
         </TabsContent>
       </Tabs>
     </div>
