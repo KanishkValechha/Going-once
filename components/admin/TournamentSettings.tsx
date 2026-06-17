@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useMutation } from 'convex/react';
+import { useMutation, useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import type { Id, Tournament } from '@/types';
 import { Badge, Button, Card, Input, Label } from '@/components/ui';
@@ -12,6 +12,7 @@ export function TournamentSettings({ tournament }: { tournament: Tournament }) {
   const setLive = useMutation(api.tournaments.setLive);
   const complete = useMutation(api.tournaments.complete);
   const regenerate = useMutation(api.tournaments.regenerateViewerToken);
+  const readiness = useQuery(api.tournaments.liveReadiness, { tournamentId: tournament._id as Id<'tournaments'> });
 
   const [name, setName] = useState(tournament.name);
   const [defaultBudget, setDefaultBudget] = useState(String(tournament.defaultBudget));
@@ -36,6 +37,14 @@ export function TournamentSettings({ tournament }: { tournament: Tournament }) {
     await navigator.clipboard.writeText(liveUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
+  }
+
+  async function goLive() {
+    try {
+      await setLive({ tournamentId: id });
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Could not go live');
+    }
   }
 
   return (
@@ -73,8 +82,23 @@ export function TournamentSettings({ tournament }: { tournament: Tournament }) {
           <h3 className="font-semibold">Live status</h3>
           <Badge tone={tournament.status === 'live' ? 'accent' : 'neutral'}>{tournament.status}</Badge>
         </div>
+        {tournament.status !== 'live' && readiness && !readiness.ready && (
+          <div className="rounded-lg border border-danger/40 bg-danger/5 p-3 text-sm text-muted">
+            {!readiness.enoughTeams && <p>Add at least 2 teams to go live.</p>}
+            {!readiness.enoughPlayers && (
+              <p>
+                Need {readiness.requiredPlayers} players (roster {readiness.rosterSize} × {readiness.teamCount} teams) —
+                you have {readiness.playerCount}.
+              </p>
+            )}
+          </div>
+        )}
         <div className="flex flex-wrap gap-2">
-          {tournament.status !== 'live' && <Button onClick={() => void setLive({ tournamentId: id })}>Go live</Button>}
+          {tournament.status !== 'live' && (
+            <Button onClick={() => void goLive()} disabled={!!readiness && !readiness.ready}>
+              Go live
+            </Button>
+          )}
           {tournament.status === 'live' && (
             <Button variant="secondary" onClick={() => void complete({ tournamentId: id })}>
               Mark completed

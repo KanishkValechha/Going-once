@@ -1,5 +1,5 @@
 import { v } from 'convex/values';
-import { mutation, query, MutationCtx } from './_generated/server';
+import { mutation, query, MutationCtx, QueryCtx } from './_generated/server';
 import { Doc, Id } from './_generated/dataModel';
 import { requireTournamentAccess, requireUser } from './lib/auth';
 import { upsertUserByEmail } from './users';
@@ -7,6 +7,38 @@ import { upsertUserByEmail } from './users';
 function newViewerToken(): string {
   // High-entropy capability token for the /live URL.
   return `tt_${crypto.randomUUID().replace(/-/g, '')}${crypto.randomUUID().replace(/-/g, '')}`;
+}
+
+/**
+ * How many teams/players a tournament has versus the minimum needed to run a
+ * fair auction: every team must be able to fill its full roster, so we need at
+ * least `rosterSize * teamCount` players (and at least two competing teams).
+ */
+async function computeReadiness(ctx: QueryCtx | MutationCtx, tournamentId: Id<'tournaments'>) {
+  const tournament = await ctx.db.get('tournaments', tournamentId);
+  if (!tournament) throw new Error('Tournament not found');
+  const teams = await ctx.db
+    .query('teams')
+    .withIndex('by_tournament', (q) => q.eq('tournamentId', tournamentId))
+    .take(100);
+  const players = await ctx.db
+    .query('players')
+    .withIndex('by_tournament_and_sortOrder', (q) => q.eq('tournamentId', tournamentId))
+    .take(1000);
+  const teamCount = teams.length;
+  const playerCount = players.length;
+  const requiredPlayers = tournament.rosterSize * teamCount;
+  const enoughTeams = teamCount >= 2;
+  const enoughPlayers = playerCount >= requiredPlayers;
+  return {
+    teamCount,
+    playerCount,
+    requiredPlayers,
+    rosterSize: tournament.rosterSize,
+    enoughTeams,
+    enoughPlayers,
+    ready: enoughTeams && enoughPlayers,
+  };
 }
 
 /** Ensure exactly one auctionState row exists for a tournament, in idle phase. */
@@ -103,11 +135,30 @@ export const update = mutation({
   },
 });
 
+/** Readiness check for going live: team/player counts vs the roster minimum. */
+export const liveReadiness = query({
+  args: { tournamentId: v.id('tournaments') },
+  handler: async (ctx, args) => {
+    await requireTournamentAccess(ctx, args.tournamentId);
+    return await computeReadiness(ctx, args.tournamentId);
+  },
+});
+
 /** Make this tournament the single `live` one; demote any other live tournament. */
 export const setLive = mutation({
   args: { tournamentId: v.id('tournaments') },
   handler: async (ctx, args) => {
     await requireTournamentAccess(ctx, args.tournamentId);
+    const readiness = await computeReadiness(ctx, args.tournamentId);
+    if (!readiness.enoughTeams) {
+      throw new Error('Add at least two teams before going live');
+    }
+    if (!readiness.enoughPlayers) {
+      throw new Error(
+        `Not enough players: ${readiness.playerCount}/${readiness.requiredPlayers} needed ` +
+          `(roster ${readiness.rosterSize} × ${readiness.teamCount} teams)`,
+      );
+    }
     const currentlyLive = await ctx.db
       .query('tournaments')
       .withIndex('by_status', (q) => q.eq('status', 'live'))
