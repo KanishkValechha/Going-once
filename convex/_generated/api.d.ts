@@ -8,7 +8,14 @@
  * @module
  */
 
-import type * as myFunctions from "../myFunctions.js";
+import type * as auction from "../auction.js";
+import type * as lib_auth from "../lib/auth.js";
+import type * as lib_budget from "../lib/budget.js";
+import type * as lib_increment from "../lib/increment.js";
+import type * as players from "../players.js";
+import type * as teams from "../teams.js";
+import type * as tournaments from "../tournaments.js";
+import type * as users from "../users.js";
 
 import type {
   ApiFromModules,
@@ -17,7 +24,14 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
-  myFunctions: typeof myFunctions;
+  auction: typeof auction;
+  "lib/auth": typeof lib_auth;
+  "lib/budget": typeof lib_budget;
+  "lib/increment": typeof lib_increment;
+  players: typeof players;
+  teams: typeof teams;
+  tournaments: typeof tournaments;
+  users: typeof users;
 }>;
 
 /**
