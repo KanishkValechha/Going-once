@@ -65,7 +65,13 @@ export const update = mutation({
   handler: async (ctx, args) => {
     await requireAccessForPlayer(ctx, args.playerId);
     const { playerId, ...patch } = args;
-    const fields = Object.fromEntries(Object.entries(patch).filter(([, val]) => val !== undefined));
+    const fields: Record<string, unknown> = Object.fromEntries(
+      Object.entries(patch).filter(([, val]) => val !== undefined),
+    );
+    // A per-captain minimum bid only applies to captains: explicitly clear it
+    // when a player is demoted so no stale captain bid lingers (patch removes a
+    // field when set to undefined).
+    if (args.isCaptain === false) fields.captainMinBid = undefined;
     await ctx.db.patch('players', playerId, fields);
     return null;
   },

@@ -1,15 +1,22 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery } from 'convex/react';
-import { Crown, ImagePlus, Plus, Trash2, Users2 } from 'lucide-react';
+import { Crown, ImagePlus, Pencil, Plus, Search, Trash2, Users2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/convex/_generated/api';
-import type { Id, PlayerStatus } from '@/types';
+import type { Id, PlayerStatus, PlayerWithImage } from '@/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
@@ -36,6 +43,18 @@ export function PlayersManager({ tournamentId }: { tournamentId: Id<'tournaments
   const [captainMinBid, setCaptainMinBid] = useState('');
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const [search, setSearch] = useState('');
+  const [editing, setEditing] = useState<PlayerWithImage | null>(null);
+
+  const filtered = useMemo(() => {
+    if (!players) return players;
+    const q = search.trim().toLowerCase();
+    if (!q) return players;
+    return players.filter(
+      (p) => p.name.toLowerCase().includes(q) || (p.role?.toLowerCase().includes(q) ?? false),
+    );
+  }, [players, search]);
 
   async function submit() {
     if (!name.trim()) return;
@@ -122,14 +141,27 @@ export function PlayersManager({ tournamentId }: { tournamentId: Id<'tournaments
         </CardContent>
       </Card>
 
-      <div>
+      <div className="flex flex-col gap-3">
+        {players !== undefined && players.length > 0 && (
+          <div className="relative">
+            <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search players by name or role…"
+              className="pl-9"
+            />
+          </div>
+        )}
         {players === undefined ? (
           <Spinner />
         ) : players.length === 0 ? (
           <EmptyHint label="No players yet — add your first on the left." />
+        ) : filtered && filtered.length === 0 ? (
+          <EmptyHint label={`No players match “${search.trim()}”.`} />
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
-            {players.map((p) => (
+            {filtered?.map((p) => (
               <Card key={p._id} className="group flex items-center gap-3 p-3">
                 <AvatarImage src={p.imageUrl} name={p.name} className="size-12 rounded-lg text-xl" />
                 <div className="min-w-0 flex-1">
@@ -148,6 +180,15 @@ export function PlayersManager({ tournamentId }: { tournamentId: Id<'tournaments
                 <Button
                   variant="ghost"
                   size="icon"
+                  className="text-muted-foreground opacity-0 transition-opacity hover:text-accent group-hover:opacity-100"
+                  onClick={() => setEditing(p)}
+                  aria-label={`Edit ${p.name}`}
+                >
+                  <Pencil className="size-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
                   className="text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
                   onClick={() => {
                     if (confirm(`Remove ${p.name}?`)) void remove({ playerId: p._id });
@@ -160,6 +201,111 @@ export function PlayersManager({ tournamentId }: { tournamentId: Id<'tournaments
           </div>
         )}
       </div>
+
+      <EditPlayerDialog player={editing} onClose={() => setEditing(null)} />
     </div>
+  );
+}
+
+function EditPlayerDialog({
+  player,
+  onClose,
+}: {
+  player: PlayerWithImage | null;
+  onClose: () => void;
+}) {
+  const update = useMutation(api.players.update);
+  const [name, setName] = useState('');
+  const [role, setRole] = useState('');
+  const [isCaptain, setIsCaptain] = useState(false);
+  const [captainMinBid, setCaptainMinBid] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  // Sync local form state whenever a different player is opened for editing.
+  const [syncedId, setSyncedId] = useState<Id<'players'> | null>(null);
+  if (player && player._id !== syncedId) {
+    setSyncedId(player._id);
+    setName(player.name);
+    setRole(player.role ?? '');
+    setIsCaptain(player.isCaptain);
+    setCaptainMinBid(player.captainMinBid != null ? String(player.captainMinBid) : '');
+  }
+
+  async function save() {
+    if (!player || !name.trim()) return;
+    setBusy(true);
+    try {
+      await update({
+        playerId: player._id,
+        name: name.trim(),
+        role: role.trim() || undefined,
+        isCaptain,
+        // Clear the captain minimum when the player is no longer a captain.
+        captainMinBid: isCaptain && captainMinBid ? Number(captainMinBid) : undefined,
+      });
+      toast.success(`${name.trim()} updated`);
+      onClose();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not update player');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog open={player !== null} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit player</DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-4">
+          <div>
+            <Label htmlFor="edit-p-name">Name</Label>
+            <Input
+              id="edit-p-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="A. Sharma"
+            />
+          </div>
+          <div>
+            <Label htmlFor="edit-p-role">Role / category (optional)</Label>
+            <Input
+              id="edit-p-role"
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
+              placeholder="All-rounder"
+            />
+          </div>
+          <label className="flex cursor-pointer items-center gap-2.5 text-sm text-muted-foreground">
+            <Checkbox checked={isCaptain} onCheckedChange={(c) => setIsCaptain(c === true)} />
+            <span className="flex items-center gap-1.5">
+              <Crown className="size-3.5 text-accent" /> Mark as captain
+            </span>
+          </label>
+          {isCaptain && (
+            <div>
+              <Label htmlFor="edit-p-capmin">Captain minimum bid (optional)</Label>
+              <Input
+                id="edit-p-capmin"
+                type="number"
+                value={captainMinBid}
+                onChange={(e) => setCaptainMinBid(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && void save()}
+                placeholder="Defaults to the player minimum"
+              />
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose} disabled={busy}>
+            Cancel
+          </Button>
+          <Button onClick={() => void save()} disabled={busy || !name.trim()}>
+            {busy ? 'Saving…' : 'Save changes'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

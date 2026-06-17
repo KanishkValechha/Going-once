@@ -2,12 +2,19 @@
 
 import { useRef, useState } from 'react';
 import { useMutation, useQuery } from 'convex/react';
-import { ImagePlus, Plus, Shield, Trash2 } from 'lucide-react';
+import { ImagePlus, Pencil, Plus, Shield, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/convex/_generated/api';
-import type { Id } from '@/types';
+import type { Id, TeamWithLogo } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
@@ -25,6 +32,7 @@ export function TeamsManager({ tournamentId }: { tournamentId: Id<'tournaments'>
   const [budget, setBudget] = useState('');
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [editing, setEditing] = useState<TeamWithLogo | null>(null);
 
   async function submit() {
     if (!name.trim()) return;
@@ -113,6 +121,15 @@ export function TeamsManager({ tournamentId }: { tournamentId: Id<'tournaments'>
                 <Button
                   variant="ghost"
                   size="icon"
+                  className="text-muted-foreground opacity-0 transition-opacity hover:text-accent group-hover:opacity-100"
+                  onClick={() => setEditing(t)}
+                  aria-label={`Edit ${t.name}`}
+                >
+                  <Pencil className="size-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
                   className="text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
                   onClick={() => {
                     if (confirm(`Remove ${t.name}?`)) void remove({ teamId: t._id });
@@ -125,7 +142,64 @@ export function TeamsManager({ tournamentId }: { tournamentId: Id<'tournaments'>
           </div>
         )}
       </div>
+
+      <EditTeamDialog team={editing} onClose={() => setEditing(null)} />
     </div>
+  );
+}
+
+function EditTeamDialog({ team, onClose }: { team: TeamWithLogo | null; onClose: () => void }) {
+  const update = useMutation(api.teams.update);
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  // Sync local form state whenever a different team is opened for editing.
+  const [syncedId, setSyncedId] = useState<Id<'teams'> | null>(null);
+  if (team && team._id !== syncedId) {
+    setSyncedId(team._id);
+    setName(team.name);
+  }
+
+  async function save() {
+    if (!team || !name.trim()) return;
+    setBusy(true);
+    try {
+      await update({ teamId: team._id, name: name.trim() });
+      toast.success(`${name.trim()} updated`);
+      onClose();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not update team');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog open={team !== null} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit team</DialogTitle>
+        </DialogHeader>
+        <div>
+          <Label htmlFor="edit-team-name">Team name</Label>
+          <Input
+            id="edit-team-name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && void save()}
+            placeholder="Royal Strikers"
+          />
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose} disabled={busy}>
+            Cancel
+          </Button>
+          <Button onClick={() => void save()} disabled={busy || !name.trim()}>
+            {busy ? 'Saving…' : 'Save changes'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

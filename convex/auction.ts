@@ -81,26 +81,54 @@ export const selectPlayer = mutation({
 });
 
 /**
- * Put a randomly chosen available player into active bidding — the auctioneer
- * reveals players one by one without picking the order. Rejected if a lot is
- * already live or no available players remain.
+ * Reveal the next player to auction and put them straight on the block. Picks a
+ * random player still in the pool; once a full pass is done (no `available`
+ * players left) every `unsold` player is recycled into a fresh round
+ * automatically, so the auctioneer just keeps pressing "Next" until nothing
+ * remains. Returns `{ revealed: false }` and goes idle when the pool is empty.
  */
-export const selectRandomPlayer = mutation({
+export const revealNextPlayer = mutation({
   args: { tournamentId: v.id('tournaments') },
   handler: async (ctx, args) => {
     await requireTournamentAccess(ctx, args.tournamentId);
     const state = await requireState(ctx, args.tournamentId);
-    if (await activeLot(ctx, state)) throw new Error('Finish the current lot before selecting another');
+    if (await activeLot(ctx, state)) throw new Error('Finish the current lot before revealing the next');
 
-    const available = await ctx.db
+    let pool = await ctx.db
       .query('players')
       .withIndex('by_tournament_and_status', (q) =>
         q.eq('tournamentId', args.tournamentId).eq('status', 'available'),
       )
       .take(1000);
-    if (available.length === 0) throw new Error('No available players left to auction');
 
-    const pick = available[Math.floor(Math.random() * available.length)];
+    // End of the round: bring every unsold player back for another pass so they
+    // come up again without the auctioneer hand-picking them.
+    if (pool.length === 0) {
+      const unsold = await ctx.db
+        .query('players')
+        .withIndex('by_tournament_and_status', (q) =>
+          q.eq('tournamentId', args.tournamentId).eq('status', 'unsold'),
+        )
+        .take(1000);
+      for (const p of unsold) {
+        await ctx.db.patch('players', p._id, { status: 'available' });
+      }
+      pool = unsold;
+    }
+
+    if (pool.length === 0) {
+      // Nothing left to auction — fall back to an idle slate.
+      await ctx.db.patch('auctionState', state._id, {
+        activePlayerId: undefined,
+        currentBid: undefined,
+        leadingTeamId: undefined,
+        bidCount: 0,
+        phase: 'idle',
+      });
+      return { revealed: false as const };
+    }
+
+    const pick = pool[Math.floor(Math.random() * pool.length)];
     await ctx.db.patch('auctionState', state._id, {
       activePlayerId: pick._id,
       currentBid: undefined,
@@ -108,7 +136,7 @@ export const selectRandomPlayer = mutation({
       bidCount: 0,
       phase: 'bidding',
     });
-    return null;
+    return { revealed: true as const };
   },
 });
 

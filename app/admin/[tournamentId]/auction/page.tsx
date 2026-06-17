@@ -289,6 +289,7 @@ function ActiveLot({ tournamentId, state }: { tournamentId: Id<'tournaments'>; s
 }
 
 function ResultLot({ tournamentId, state }: { tournamentId: Id<'tournaments'>; state: ConsoleState }) {
+  const revealNext = useMutation(api.auction.revealNextPlayer);
   const nextLot = useMutation(api.auction.nextLot);
   const undoSold = useMutation(api.auction.undoSold);
 
@@ -299,9 +300,12 @@ function ResultLot({ tournamentId, state }: { tournamentId: Id<'tournaments'>; s
 
   async function next() {
     try {
-      await nextLot({ tournamentId });
+      const res = await revealNext({ tournamentId });
+      if (res && !res.revealed) {
+        toast('Every player has been auctioned — mark the tournament completed when you’re done.');
+      }
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not advance');
+      toast.error(e instanceof Error ? e.message : 'Could not reveal the next player');
     }
   }
 
@@ -365,8 +369,11 @@ function ResultLot({ tournamentId, state }: { tournamentId: Id<'tournaments'>; s
           <ArrowRight className="size-5" /> Next player
         </Button>
         <p className="text-xs text-muted-foreground">
-          You&apos;ll then reveal a random player or pick the next one from the list.
+          Reveals the next player automatically. Once everyone has had a turn, unsold players come up again on their own.
         </p>
+        <Button variant="ghost" size="sm" className="self-start text-muted-foreground" onClick={() => void nextLot({ tournamentId })}>
+          Pick from the list instead
+        </Button>
       </div>
     </div>
   );
@@ -375,17 +382,21 @@ function ResultLot({ tournamentId, state }: { tournamentId: Id<'tournaments'>; s
 function SelectPlayer({ tournamentId }: { tournamentId: Id<'tournaments'> }) {
   const players = useQuery(api.players.listByTournament, { tournamentId });
   const selectPlayer = useMutation(api.auction.selectPlayer);
-  const selectRandomPlayer = useMutation(api.auction.selectRandomPlayer);
+  const revealNext = useMutation(api.auction.revealNextPlayer);
 
   if (players === undefined) return <Spinner />;
   const available = players.filter((p) => p.status === 'available');
   const unsold = players.filter((p) => p.status === 'unsold');
+  const nothingLeft = available.length === 0 && unsold.length === 0;
 
-  async function revealRandom() {
+  async function reveal() {
     try {
-      await selectRandomPlayer({ tournamentId });
+      const res = await revealNext({ tournamentId });
+      if (res && !res.revealed) {
+        toast('No players left to auction.');
+      }
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not pick a player');
+      toast.error(e instanceof Error ? e.message : 'Could not reveal a player');
     }
   }
 
@@ -394,22 +405,19 @@ function SelectPlayer({ tournamentId }: { tournamentId: Id<'tournaments'> }) {
       <Card className="flex flex-col items-center gap-4 p-10 text-center">
         <p className="display text-2xl">No active lot</p>
         <p className="max-w-sm text-sm text-muted-foreground">
-          Reveal the next player at random for some drama, or pick one manually below.
+          {available.length === 0 && unsold.length > 0
+            ? 'Everyone has had a turn — reveal the next player to start a fresh round with the unsold players.'
+            : 'Reveal the next player at random for some drama, or pick one manually below. Unsold players come back automatically after each round.'}
         </p>
-        <Button size="xl" onClick={() => void revealRandom()} disabled={available.length === 0}>
-          <Shuffle className="size-5" /> Reveal random player
+        <Button size="xl" onClick={() => void reveal()} disabled={nothingLeft}>
+          <Shuffle className="size-5" /> Reveal next player
         </Button>
       </Card>
 
-      <Section
-        title="Available"
-        players={available}
-        onSelect={(playerId) => void selectPlayer({ tournamentId, playerId })}
-      />
-      {unsold.length > 0 && (
+      {available.length > 0 && (
         <Section
-          title="Unsold · re-auction"
-          players={unsold}
+          title="Available"
+          players={available}
           onSelect={(playerId) => void selectPlayer({ tournamentId, playerId })}
         />
       )}
