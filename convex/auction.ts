@@ -290,6 +290,80 @@ export const undoSold = mutation({
   },
 });
 
+/**
+ * Restart the auction from scratch: every player returns to `available`, each
+ * team's spent budget is refunded and its roster count cleared, bid history is
+ * wiped, and the live state goes idle. The teams and players themselves stay —
+ * only their auction results are undone.
+ */
+export const resetAuction = mutation({
+  args: { tournamentId: v.id('tournaments') },
+  handler: async (ctx, args) => {
+    await requireTournamentAccess(ctx, args.tournamentId);
+
+    // Return every player to the pool, tallying what each team had spent so we
+    // can refund it — this restores custom per-team budgets, not just defaults.
+    const players = await ctx.db
+      .query('players')
+      .withIndex('by_tournament_and_sortOrder', (q) => q.eq('tournamentId', args.tournamentId))
+      .take(2000);
+    const refundByTeam = new Map<Id<'teams'>, number>();
+    for (const p of players) {
+      if (p.status === 'sold' && p.soldToTeamId && p.soldPrice !== undefined) {
+        refundByTeam.set(p.soldToTeamId, (refundByTeam.get(p.soldToTeamId) ?? 0) + p.soldPrice);
+      }
+      if (p.status !== 'available' || p.soldToTeamId || p.soldPrice !== undefined) {
+        await ctx.db.patch('players', p._id, {
+          status: 'available',
+          soldToTeamId: undefined,
+          soldPrice: undefined,
+        });
+      }
+    }
+
+    // Refund each team's spend and clear its roster count.
+    const teams = await ctx.db
+      .query('teams')
+      .withIndex('by_tournament', (q) => q.eq('tournamentId', args.tournamentId))
+      .take(200);
+    for (const t of teams) {
+      const refund = refundByTeam.get(t._id) ?? 0;
+      if (refund !== 0 || t.playersWon !== 0) {
+        await ctx.db.patch('teams', t._id, {
+          remainingBudget: t.remainingBudget + refund,
+          playersWon: 0,
+        });
+      }
+    }
+
+    // Wipe bid history for a clean slate.
+    for await (const b of ctx.db
+      .query('bids')
+      .withIndex('by_tournament', (q) => q.eq('tournamentId', args.tournamentId))) {
+      await ctx.db.delete('bids', b._id);
+    }
+
+    // Idle the live auction state.
+    const state = await getState(ctx, args.tournamentId);
+    if (state) {
+      await ctx.db.patch('auctionState', state._id, {
+        activePlayerId: undefined,
+        currentBid: undefined,
+        leadingTeamId: undefined,
+        bidCount: 0,
+        phase: 'idle',
+      });
+    } else {
+      await ctx.db.insert('auctionState', {
+        tournamentId: args.tournamentId,
+        bidCount: 0,
+        phase: 'idle',
+      });
+    }
+    return null;
+  },
+});
+
 /** Admin console state: active lot, leading team, and per-team affordability. */
 export const consoleState = query({
   args: { tournamentId: v.id('tournaments') },

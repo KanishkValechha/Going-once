@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useAtom } from 'jotai';
 import { useMutation, useQuery } from 'convex/react';
 import { FunctionReturnType } from 'convex/server';
-import { ArrowLeft, Check, ExternalLink, Shuffle, Undo2, X } from 'lucide-react';
+import { ArrowLeft, Check, ExternalLink, RotateCcw, Shuffle, Undo2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/convex/_generated/api';
 import type { Id } from '@/types';
@@ -25,6 +25,23 @@ export default function AuctionConsolePage({ params }: { params: Promise<{ tourn
   const { tournamentId } = use(params);
   const id = tournamentId as Id<'tournaments'>;
   const state = useQuery(api.auction.consoleState, { tournamentId: id });
+  const resetAuction = useMutation(api.auction.resetAuction);
+
+  async function reset() {
+    if (
+      !confirm(
+        'Reset the auction? Every player returns to the pool and all team budgets are restored. ' +
+          'Teams and players you added stay — only the auction results are cleared.',
+      )
+    )
+      return;
+    try {
+      await resetAuction({ tournamentId: id });
+      toast.success('Auction reset — every player is back in the pool.');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not reset the auction');
+    }
+  }
 
   if (state === undefined) return <Spinner label="Loading console…" />;
   if (state === null) return <p className="text-muted-foreground">Tournament not found.</p>;
@@ -48,11 +65,16 @@ export default function AuctionConsolePage({ params }: { params: Promise<{ tourn
               {state.tournament.status}
             </Badge>
           </div>
-          <a href={buildLiveUrl(state.tournament.viewerToken)} target="_blank" rel="noreferrer">
-            <Button variant="secondary">
-              <ExternalLink className="size-4" /> Live screen
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" onClick={() => void reset()}>
+              <RotateCcw className="size-4" /> Reset auction
             </Button>
-          </a>
+            <a href={buildLiveUrl(state.tournament.viewerToken)} target="_blank" rel="noreferrer">
+              <Button variant="secondary">
+                <ExternalLink className="size-4" /> Live screen
+              </Button>
+            </a>
+          </div>
         </div>
       </div>
 
