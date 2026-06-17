@@ -2,7 +2,7 @@ import { v } from 'convex/values';
 import { mutation, query, QueryCtx, MutationCtx } from './_generated/server';
 import { Id } from './_generated/dataModel';
 import { requireTournamentAccess } from './lib/auth';
-import { budgetStatus, canTeamAfford, maxAffordableBid } from './lib/budget';
+import { budgetStatus, canTeamAfford, maxAffordableBid, playerMinBid } from './lib/budget';
 import { nextBid } from './lib/increment';
 
 /** Resolve a `live` tournament from a viewer token, or null if invalid/inactive. */
@@ -130,15 +130,16 @@ export const placeBid = mutation({
     const tournament = await ctx.db.get('tournaments', args.tournamentId);
     if (!tournament) throw new Error('Tournament missing');
 
+    const openingBid = playerMinBid(tournament, player.isCaptain);
     let amount: number;
     if (args.overrideAmount !== undefined) {
-      const floor = state.currentBid ?? player.basePrice;
+      const floor = state.currentBid ?? openingBid;
       if (state.currentBid === undefined ? args.overrideAmount < floor : args.overrideAmount <= floor) {
         throw new Error('Override must exceed the current bid');
       }
       amount = args.overrideAmount;
     } else {
-      amount = nextBid(state.currentBid, player.basePrice, tournament.minBidIncrement);
+      amount = nextBid(state.currentBid, openingBid, tournament.minBidIncrement);
     }
 
     // Hard limit: a team may not bid past what it can pay while still affording
@@ -325,6 +326,7 @@ export const consoleState = query({
     const activePlayer = liveLot
       ? {
           ...liveLot,
+          minBid: playerMinBid(tournament, liveLot.isCaptain),
           imageUrl: liveLot.imageStorageId ? await ctx.storage.getUrl(liveLot.imageStorageId) : null,
         }
       : null;
@@ -383,7 +385,7 @@ export const liveTicker = query({
       player: {
         name: player.name,
         role: player.role ?? null,
-        basePrice: player.basePrice,
+        minBid: playerMinBid(tournament, player.isCaptain),
         imageUrl: player.imageStorageId ? await ctx.storage.getUrl(player.imageStorageId) : null,
       },
       leadingTeam: leadingTeam

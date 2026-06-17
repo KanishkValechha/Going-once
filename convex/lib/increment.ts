@@ -12,9 +12,9 @@ export function computeStep(currentBid: number, minIncrement: number): number {
 
 /**
  * Next automatic bid amount. The opening bid (no current bid yet) sits at the
- * player's base price; subsequent bids add the dynamic step.
+ * tournament's minimum bid for the player; subsequent bids add the dynamic step.
  */
-export function nextBid(currentBid: number | undefined, basePrice: number, minIncrement: number): number {
-  if (currentBid === undefined) return basePrice;
+export function nextBid(currentBid: number | undefined, openingBid: number, minIncrement: number): number {
+  if (currentBid === undefined) return openingBid;
   return currentBid + computeStep(currentBid, minIncrement);
 }

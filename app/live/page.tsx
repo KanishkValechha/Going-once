@@ -96,7 +96,7 @@ function ActivePanel({ ticker }: { ticker: Ticker }) {
           </h2>
           <p className="mt-2 text-muted-foreground">
             {ticker.player?.role ? `${ticker.player.role} · ` : ''}
-            Base {formatAmount(ticker.player?.basePrice)}
+            Min {formatAmount(ticker.player?.minBid)}
           </p>
         </div>
       </div>

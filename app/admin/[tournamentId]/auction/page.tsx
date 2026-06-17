@@ -115,7 +115,7 @@ function ActiveLot({ tournamentId, state }: { tournamentId: Id<'tournaments'>; s
   const player = state.activePlayer;
   if (!player) return <Spinner />;
 
-  const prospectiveBid = nextBid(state.currentBid ?? undefined, player.basePrice, state.tournament.minBidIncrement);
+  const prospectiveBid = nextBid(state.currentBid ?? undefined, player.minBid, state.tournament.minBidIncrement);
 
   function bid(teamId: Id<'teams'>) {
     void placeBid({ tournamentId, teamId, expectedBidCount: state.bidCount });
@@ -141,7 +141,7 @@ function ActiveLot({ tournamentId, state }: { tournamentId: Id<'tournaments'>; s
             <p className="eyebrow">Now on the block</p>
             <h2 className="display text-3xl">{player.name}</h2>
             <p className="text-sm text-muted-foreground">
-              {player.role ? `${player.role} · ` : ''}base {formatAmount(player.basePrice)}
+              {player.role ? `${player.role} · ` : ''}min {formatAmount(player.minBid)}
             </p>
           </div>
         </div>
@@ -319,7 +319,6 @@ function Section({
     _id: Id<'players'>;
     name: string;
     role?: string;
-    basePrice: number;
     imageUrl: string | null;
     isCaptain: boolean;
   }[];
@@ -343,7 +342,7 @@ function Section({
                 {p.isCaptain && <Badge variant="accent">C</Badge>}
               </p>
               <p className="tnum text-sm text-muted-foreground">
-                {p.role ? `${p.role} · ` : ''}base {formatAmount(p.basePrice)}
+                {p.role ? p.role : p.isCaptain ? 'Captain' : 'Player'}
               </p>
             </div>
           </button>

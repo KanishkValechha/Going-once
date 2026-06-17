@@ -14,7 +14,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { AvatarImage } from '@/components/ui/avatar-image';
-import { formatAmount } from '@/helpers/format';
 import { uploadFile } from '@/helpers/upload';
 import { EmptyHint } from '@/components/admin/TeamsManager';
 
@@ -32,13 +31,12 @@ export function PlayersManager({ tournamentId }: { tournamentId: Id<'tournaments
 
   const [name, setName] = useState('');
   const [role, setRole] = useState('');
-  const [basePrice, setBasePrice] = useState('');
   const [isCaptain, setIsCaptain] = useState(false);
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   async function submit() {
-    if (!name.trim() || !basePrice) return;
+    if (!name.trim()) return;
     setBusy(true);
     try {
       let imageStorageId: Id<'_storage'> | undefined;
@@ -51,14 +49,12 @@ export function PlayersManager({ tournamentId }: { tournamentId: Id<'tournaments
         tournamentId,
         name: name.trim(),
         role: role.trim() || undefined,
-        basePrice: Number(basePrice),
         isCaptain,
         imageStorageId,
       });
       toast.success(`${name.trim()} added`);
       setName('');
       setRole('');
-      setBasePrice('');
       setIsCaptain(false);
       if (fileRef.current) fileRef.current.value = '';
     } catch (e) {
@@ -82,18 +78,13 @@ export function PlayersManager({ tournamentId }: { tournamentId: Id<'tournaments
             <Input id="p-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="A. Sharma" />
           </div>
           <div>
-            <Label htmlFor="p-role">Role / category</Label>
-            <Input id="p-role" value={role} onChange={(e) => setRole(e.target.value)} placeholder="All-rounder" />
-          </div>
-          <div>
-            <Label htmlFor="p-base">Base price</Label>
+            <Label htmlFor="p-role">Role / category (optional)</Label>
             <Input
-              id="p-base"
-              type="number"
-              value={basePrice}
-              onChange={(e) => setBasePrice(e.target.value)}
+              id="p-role"
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && void submit()}
-              placeholder="500"
+              placeholder="All-rounder"
             />
           </div>
           <div>
@@ -108,7 +99,7 @@ export function PlayersManager({ tournamentId }: { tournamentId: Id<'tournaments
               <Crown className="size-3.5 text-accent" /> Mark as captain
             </span>
           </label>
-          <Button onClick={() => void submit()} disabled={busy || !name.trim() || !basePrice}>
+          <Button onClick={() => void submit()} disabled={busy || !name.trim()}>
             <Plus className="size-4" /> {busy ? 'Adding…' : 'Add player'}
           </Button>
         </CardContent>
@@ -132,7 +123,7 @@ export function PlayersManager({ tournamentId }: { tournamentId: Id<'tournaments
                     )}
                   </p>
                   <p className="tnum text-sm text-muted-foreground">
-                    {p.role ? `${p.role} · ` : ''}base {formatAmount(p.basePrice)}
+                    {p.role ? p.role : p.isCaptain ? 'Captain' : 'Player'}
                   </p>
                 </div>
                 <Badge variant={statusVariant[p.status]}>{p.status}</Badge>
