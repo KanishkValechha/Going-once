@@ -22,3 +22,17 @@ export function maxAffordableBid(team: Doc<'teams'>, tournament: Doc<'tournament
 export function canTeamAfford(team: Doc<'teams'>, tournament: Doc<'tournaments'>, amount: number): boolean {
   return amount <= maxAffordableBid(team, tournament);
 }
+
+/**
+ * Graduated balance flag for a team during the auction:
+ *   'out' — can't bid any further (roster full or no headroom left)
+ *   'low' — closing in on its limit (room for only a couple more min-bids)
+ *   'ok'  — comfortable headroom.
+ */
+export function budgetStatus(team: Doc<'teams'>, tournament: Doc<'tournaments'>): 'ok' | 'low' | 'out' {
+  if (team.playersWon >= tournament.rosterSize) return 'out';
+  const max = maxAffordableBid(team, tournament);
+  if (max <= 0) return 'out';
+  if (max < tournament.minBidIncrement * 3) return 'low';
+  return 'ok';
+}

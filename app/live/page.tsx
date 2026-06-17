@@ -116,7 +116,13 @@ function TeamBoard({ board, compact = false }: { board: Board; compact?: boolean
               </p>
             )}
           </div>
-          <p className="tnum text-right text-lg font-bold text-accent">{formatAmount(t.remainingBudget)}</p>
+          <p
+            className={`tnum text-right text-lg font-bold ${
+              t.budgetStatus === 'low' ? 'text-warning' : t.budgetStatus === 'out' ? 'text-muted' : 'text-accent'
+            }`}
+          >
+            {formatAmount(t.remainingBudget)}
+          </p>
         </div>
       ))}
     </div>

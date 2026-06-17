@@ -60,12 +60,13 @@ export function Label({ children }: { children: ReactNode }) {
   return <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-muted">{children}</label>;
 }
 
-export function Badge({ children, tone = 'neutral' }: { children: ReactNode; tone?: 'neutral' | 'accent' | 'positive' | 'danger' }) {
+export function Badge({ children, tone = 'neutral' }: { children: ReactNode; tone?: 'neutral' | 'accent' | 'positive' | 'danger' | 'warning' }) {
   const tones = {
     neutral: 'bg-surface-2 text-muted border-border',
     accent: 'bg-accent/15 text-accent border-accent/40',
     positive: 'bg-positive/15 text-positive border-positive/40',
     danger: 'bg-danger/15 text-danger border-danger/40',
+    warning: 'bg-warning/15 text-warning border-warning/40',
   };
   return (
     <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${tones[tone]}`}>

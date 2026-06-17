@@ -2,7 +2,7 @@ import { v } from 'convex/values';
 import { mutation, query, QueryCtx, MutationCtx } from './_generated/server';
 import { Id } from './_generated/dataModel';
 import { requireTournamentAccess } from './lib/auth';
-import { canTeamAfford, maxAffordableBid } from './lib/budget';
+import { budgetStatus, canTeamAfford, maxAffordableBid } from './lib/budget';
 import { nextBid } from './lib/increment';
 
 /** Resolve a `live` tournament from a viewer token, or null if invalid/inactive. */
@@ -323,6 +323,7 @@ export const consoleState = query({
       teams: teams.map((t) => ({
         ...t,
         maxBid: maxAffordableBid(t, tournament),
+        budgetStatus: budgetStatus(t, tournament),
         roster: rosterByTeam.get(t._id) ?? [],
       })),
     };
@@ -406,6 +407,7 @@ export const liveBoard = query({
           remainingBudget: t.remainingBudget,
           playersWon: t.playersWon,
           logoUrl: t.logoStorageId ? await ctx.storage.getUrl(t.logoStorageId) : null,
+          budgetStatus: budgetStatus(t, tournament),
           roster: rosterByTeam.get(t._id) ?? [],
         })),
       ),

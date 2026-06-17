@@ -228,9 +228,17 @@ function ActiveLot({ tournamentId, state }: { tournamentId: Id<'tournaments'>; s
                       : 'border-border bg-surface hover:border-accent/60'
                 }`}
               >
-                <span className="font-semibold">{t.name}</span>
+                <span className="flex items-center gap-2 font-semibold">
+                  {t.name}
+                  {t.budgetStatus === 'low' && <Badge tone="warning">Low</Badge>}
+                  {t.budgetStatus === 'out' && <Badge tone="neutral">Out</Badge>}
+                </span>
                 <span className="tnum text-sm text-muted">{formatAmount(t.remainingBudget)} left</span>
-                <span className={`tnum mt-1 text-xs ${cannotAfford ? 'text-danger' : 'text-muted'}`}>
+                <span
+                  className={`tnum mt-1 text-xs ${
+                    cannotAfford ? 'text-danger' : t.budgetStatus === 'low' ? 'text-warning' : 'text-muted'
+                  }`}
+                >
                   max {formatAmount(t.maxBid)}
                 </span>
               </button>
