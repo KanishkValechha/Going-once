@@ -19,6 +19,14 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Separator } from '@/components/ui/separator';
 import { Spinner } from '@/components/ui/spinner';
 import { AvatarImage } from '@/components/ui/avatar-image';
 import { formatAmount } from '@/helpers/format';
@@ -33,6 +41,7 @@ const statusVariant: Record<PlayerStatus, 'neutral' | 'positive' | 'destructive'
 
 export function PlayersManager({ tournamentId }: { tournamentId: Id<'tournaments'> }) {
   const players = useQuery(api.players.listByTournament, { tournamentId });
+  const teams = useQuery(api.teams.listByTournament, { tournamentId });
   const create = useMutation(api.players.create);
   const remove = useMutation(api.players.remove);
   const generateUploadUrl = useMutation(api.players.generateUploadUrl);
@@ -202,23 +211,33 @@ export function PlayersManager({ tournamentId }: { tournamentId: Id<'tournaments
         )}
       </div>
 
-      <EditPlayerDialog player={editing} onClose={() => setEditing(null)} />
+      <EditPlayerDialog
+        player={editing}
+        teams={teams ?? []}
+        onClose={() => setEditing(null)}
+      />
     </div>
   );
 }
 
 function EditPlayerDialog({
   player,
+  teams,
   onClose,
 }: {
   player: PlayerWithImage | null;
+  teams: { _id: Id<'teams'>; name: string }[];
   onClose: () => void;
 }) {
   const update = useMutation(api.players.update);
+  const directAssign = useMutation(api.players.directAssign);
+  const unassign = useMutation(api.players.unassign);
   const [name, setName] = useState('');
   const [role, setRole] = useState('');
   const [isCaptain, setIsCaptain] = useState(false);
   const [captainMinBid, setCaptainMinBid] = useState('');
+  const [teamId, setTeamId] = useState('');
+  const [price, setPrice] = useState('0');
   const [busy, setBusy] = useState(false);
 
   // Sync local form state whenever a different player is opened for editing.
@@ -229,7 +248,12 @@ function EditPlayerDialog({
     setRole(player.role ?? '');
     setIsCaptain(player.isCaptain);
     setCaptainMinBid(player.captainMinBid != null ? String(player.captainMinBid) : '');
+    setTeamId(player.soldToTeamId ?? '');
+    setPrice(player.soldPrice != null ? String(player.soldPrice) : '0');
   }
+
+  const isAssigned = player?.status === 'sold';
+  const assignedTeam = player?.soldToTeamId ? teams.find((t) => t._id === player.soldToTeamId) : null;
 
   async function save() {
     if (!player || !name.trim()) return;
@@ -247,6 +271,35 @@ function EditPlayerDialog({
       onClose();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not update player');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function assign() {
+    if (!player || !teamId) return;
+    setBusy(true);
+    try {
+      await directAssign({ playerId: player._id, teamId: teamId as Id<'teams'>, price: Number(price) });
+      toast.success(`${player.name} assigned`);
+      onClose();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not assign');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function clearAssignment() {
+    if (!player) return;
+    setBusy(true);
+    try {
+      await unassign({ playerId: player._id });
+      setTeamId('');
+      setPrice('0');
+      toast.success(`${player.name} unassigned`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not unassign');
     } finally {
       setBusy(false);
     }
@@ -296,6 +349,52 @@ function EditPlayerDialog({
               />
             </div>
           )}
+
+          <Separator />
+
+          <div className="flex flex-col gap-2">
+            <Label>Assign to team</Label>
+            {isAssigned && (
+              <p className="text-sm text-positive">
+                Currently on {assignedTeam?.name ?? 'a team'} · {formatAmount(player?.soldPrice ?? 0)}
+              </p>
+            )}
+            <div className="flex items-center gap-2">
+              <Select value={teamId} onValueChange={setTeamId}>
+                <SelectTrigger className="flex-1">
+                  <SelectValue placeholder="Select team…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {teams.map((t) => (
+                    <SelectItem key={t._id} value={t._id}>
+                      {t.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Input
+                type="number"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && void assign()}
+                className="w-28"
+                placeholder="Amount"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="secondary" className="flex-1" onClick={() => void assign()} disabled={busy || !teamId}>
+                {isAssigned ? 'Update assignment' : 'Assign to team'}
+              </Button>
+              {isAssigned && (
+                <Button variant="ghost" onClick={() => void clearAssignment()} disabled={busy}>
+                  Unassign
+                </Button>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Sets the player as sold to this team for a custom amount, deducting it from their budget. Use 0 for a free pick.
+            </p>
+          </div>
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose} disabled={busy}>
