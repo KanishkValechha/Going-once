@@ -105,4 +105,57 @@ export default defineSchema({
   })
     .index('by_player_and_seq', ['playerId', 'seq'])
     .index('by_tournament', ['tournamentId']),
+
+  // The post-auction tournament fixture. One bracket per tournament (regenerating
+  // wipes and recreates it). `seed` is the random draw order of team ids — small
+  // and bounded by team count, so an inline array is fine here.
+  brackets: defineTable({
+    tournamentId: v.id('tournaments'),
+    format: v.union(
+      v.literal('single_elimination'),
+      v.literal('round_robin'),
+      v.literal('groups_knockout'),
+    ),
+    seed: v.array(v.id('teams')),
+    // groups_knockout only: how many random groups, and how many advance per group.
+    groupCount: v.optional(v.number()),
+    advancePerGroup: v.optional(v.number()),
+    // groups_knockout: flips true once the group stage finishes and the knockout
+    // round has been seeded from the group standings (so we only seed once).
+    knockoutSeeded: v.optional(v.boolean()),
+  }).index('by_tournament', ['tournamentId']),
+
+  // Individual fixtures within a bracket (a child table, never an array on a doc).
+  matches: defineTable({
+    tournamentId: v.id('tournaments'),
+    bracketId: v.id('brackets'),
+    // 'group' = round-robin fixture (pure round robin or a groups_knockout group);
+    // 'knockout' = single-elimination match (incl. the groups_knockout finals).
+    stage: v.union(v.literal('group'), v.literal('knockout')),
+    // Which group (groups_knockout); 0 for pure round robin; undefined for knockout.
+    groupIndex: v.optional(v.number()),
+    round: v.number(),
+    // Position of this match within its round, for stable rendering order.
+    slot: v.number(),
+    label: v.optional(v.string()),
+    teamAId: v.optional(v.id('teams')),
+    teamBId: v.optional(v.id('teams')),
+    // Human hint shown before a knockout slot's feeder is decided ("Winner of QF1",
+    // "Group A #1"). Cleared once the real team lands.
+    teamASource: v.optional(v.string()),
+    teamBSource: v.optional(v.string()),
+    // Knockout advancement: the winner flows into this match's given slot
+    // (0 => teamA, 1 => teamB). Absent on the final and on group matches.
+    nextMatchId: v.optional(v.id('matches')),
+    nextSlot: v.optional(v.number()),
+    scoreA: v.optional(v.number()),
+    scoreB: v.optional(v.number()),
+    winnerTeamId: v.optional(v.id('teams')),
+    // 'pending' = waiting on a team to be decided; 'ready' = both teams known,
+    // playable; 'done' = result recorded. Byes are auto-resolved to 'done'.
+    status: v.union(v.literal('pending'), v.literal('ready'), v.literal('done')),
+    isBye: v.optional(v.boolean()),
+  })
+    .index('by_bracket', ['bracketId'])
+    .index('by_tournament', ['tournamentId']),
 });

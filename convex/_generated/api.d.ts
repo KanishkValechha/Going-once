@@ -9,6 +9,8 @@
  */
 
 import type * as auction from "../auction.js";
+import type * as bracket from "../bracket.js";
+import type * as exports from "../exports.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_budget from "../lib/budget.js";
 import type * as lib_increment from "../lib/increment.js";
@@ -25,6 +27,8 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   auction: typeof auction;
+  bracket: typeof bracket;
+  exports: typeof exports;
   "lib/auth": typeof lib_auth;
   "lib/budget": typeof lib_budget;
   "lib/increment": typeof lib_increment;
