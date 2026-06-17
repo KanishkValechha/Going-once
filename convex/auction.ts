@@ -323,6 +323,68 @@ export const nextLot = mutation({
   },
 });
 
+/**
+ * Step a just-resolved lot (result phase) back into live bidding so the
+ * auctioneer can correct the winning team or amount. A sale is reversed (team
+ * refunded, player returned to the pool) and the bid state is rebuilt from the
+ * surviving bid history, so the leader/amount and bid counter resume where they
+ * left off (undo, override, then re-sell as needed).
+ */
+export const reopenLot = mutation({
+  args: { tournamentId: v.id('tournaments') },
+  handler: async (ctx, args) => {
+    await requireTournamentAccess(ctx, args.tournamentId);
+    const state = await requireState(ctx, args.tournamentId);
+    if (state.phase !== 'result' || !state.activePlayerId) {
+      throw new Error('No resolved lot to reopen');
+    }
+    const player = await ctx.db.get('players', state.activePlayerId);
+    if (!player) throw new Error('Player not found');
+
+    // Reverse a completed sale: refund the buyer and free the roster slot.
+    if (player.status === 'sold' && player.soldToTeamId && player.soldPrice !== undefined) {
+      const team = await ctx.db.get('teams', player.soldToTeamId);
+      if (team) {
+        await ctx.db.patch('teams', team._id, {
+          remainingBudget: team.remainingBudget + player.soldPrice,
+          playersWon: Math.max(0, team.playersWon - 1),
+        });
+      }
+    }
+    await ctx.db.patch('players', player._id, {
+      status: 'available',
+      soldToTeamId: undefined,
+      soldPrice: undefined,
+    });
+
+    // Rebuild the bidding state from the bid history: the highest seq drives the
+    // idempotency counter; the latest non-undone bid is the standing leader.
+    let bidCount = 0;
+    let currentBid: number | undefined = undefined;
+    let leadingTeamId: Id<'teams'> | undefined = undefined;
+    for await (const b of ctx.db
+      .query('bids')
+      .withIndex('by_player_and_seq', (q) => q.eq('playerId', player._id))
+      .order('desc')) {
+      if (bidCount === 0) bidCount = b.seq; // first row in desc order = max seq
+      if (!b.undone) {
+        currentBid = b.amount;
+        leadingTeamId = b.teamId;
+        break;
+      }
+    }
+
+    await ctx.db.patch('auctionState', state._id, {
+      activePlayerId: player._id,
+      currentBid,
+      leadingTeamId,
+      bidCount,
+      phase: 'bidding',
+    });
+    return null;
+  },
+});
+
 /** Reverse a completed sale: refund the team and return the player to the pool. */
 export const undoSold = mutation({
   args: { tournamentId: v.id('tournaments'), playerId: v.id('players') },

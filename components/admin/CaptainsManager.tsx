@@ -50,20 +50,37 @@ function CaptainRow({
   teams: { _id: Id<'teams'>; name: string }[];
 }) {
   const directAssign = useMutation(api.players.directAssign);
-  const [teamId, setTeamId] = useState<string>('');
-  const [price, setPrice] = useState('0');
+  const unassign = useMutation(api.players.unassign);
+  // Pre-fill from the current assignment so the inputs always reflect reality.
+  const [teamId, setTeamId] = useState<string>(captain.soldToTeamId ?? '');
+  const [price, setPrice] = useState(captain.soldPrice != null ? String(captain.soldPrice) : '0');
   const [busy, setBusy] = useState(false);
 
+  const isAssigned = captain.status === 'sold';
   const assignedTeam = captain.soldToTeamId ? teams.find((t) => t._id === captain.soldToTeamId) : null;
 
-  async function assign() {
+  async function save() {
     if (!teamId) return;
     setBusy(true);
     try {
       await directAssign({ playerId: captain._id, teamId: teamId as Id<'teams'>, price: Number(price) });
-      toast.success(`${captain.name} assigned`);
+      toast.success(`${captain.name} saved`);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not assign');
+      toast.error(e instanceof Error ? e.message : 'Could not save');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function clear() {
+    setBusy(true);
+    try {
+      await unassign({ playerId: captain._id });
+      setTeamId('');
+      setPrice('0');
+      toast.success(`${captain.name} unassigned`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not unassign');
     } finally {
       setBusy(false);
     }
@@ -75,7 +92,7 @@ function CaptainRow({
         <Crown className="size-4 shrink-0 text-accent" />
         <div className="min-w-0">
           <p className="truncate font-semibold">{captain.name}</p>
-          {captain.status === 'sold' && assignedTeam ? (
+          {isAssigned && assignedTeam ? (
             <p className="text-sm text-positive">
               Captain of {assignedTeam.name} · {formatAmount(captain.soldPrice ?? 0)}
             </p>
@@ -84,32 +101,36 @@ function CaptainRow({
           )}
         </div>
       </div>
-      {captain.status !== 'sold' && (
-        <div className="flex items-center gap-2">
-          <Select value={teamId} onValueChange={setTeamId}>
-            <SelectTrigger className="w-44">
-              <SelectValue placeholder="Select team…" />
-            </SelectTrigger>
-            <SelectContent>
-              {teams.map((t) => (
-                <SelectItem key={t._id} value={t._id}>
-                  {t.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Input
-            type="number"
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-            className="w-28"
-            placeholder="Price"
-          />
-          <Button onClick={() => void assign()} disabled={busy || !teamId}>
-            Assign
+      <div className="flex items-center gap-2">
+        <Select value={teamId} onValueChange={setTeamId}>
+          <SelectTrigger className="w-44">
+            <SelectValue placeholder="Select team…" />
+          </SelectTrigger>
+          <SelectContent>
+            {teams.map((t) => (
+              <SelectItem key={t._id} value={t._id}>
+                {t.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Input
+          type="number"
+          value={price}
+          onChange={(e) => setPrice(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && void save()}
+          className="w-28"
+          placeholder="Price"
+        />
+        <Button onClick={() => void save()} disabled={busy || !teamId}>
+          Save
+        </Button>
+        {isAssigned && (
+          <Button variant="ghost" onClick={() => void clear()} disabled={busy}>
+            Unassign
           </Button>
-        </div>
-      )}
+        )}
+      </div>
     </Card>
   );
 }

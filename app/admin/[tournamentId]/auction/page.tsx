@@ -291,7 +291,7 @@ function ActiveLot({ tournamentId, state }: { tournamentId: Id<'tournaments'>; s
 function ResultLot({ tournamentId, state }: { tournamentId: Id<'tournaments'>; state: ConsoleState }) {
   const revealNext = useMutation(api.auction.revealNextPlayer);
   const nextLot = useMutation(api.auction.nextLot);
-  const undoSold = useMutation(api.auction.undoSold);
+  const reopenLot = useMutation(api.auction.reopenLot);
 
   const player = state.activePlayer;
   if (!player) return <Spinner />;
@@ -306,6 +306,15 @@ function ResultLot({ tournamentId, state }: { tournamentId: Id<'tournaments'>; s
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not reveal the next player');
+    }
+  }
+
+  async function reopen() {
+    try {
+      await reopenLot({ tournamentId });
+      toast.success('Lot reopened — adjust the bid or winning team, then sell again.');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not reopen the lot');
     }
   }
 
@@ -344,22 +353,6 @@ function ResultLot({ tournamentId, state }: { tournamentId: Id<'tournaments'>; s
           )}
         </div>
 
-        {sold && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="self-start text-muted-foreground"
-            onClick={() => {
-              if (confirm(`Undo the sale of ${player.name}? The player returns to the pool and the team is refunded.`)) {
-                void undoSold({ tournamentId, playerId: player._id })
-                  .then(() => toast.success('Sale undone'))
-                  .catch((e) => toast.error(e instanceof Error ? e.message : 'Could not undo'));
-              }
-            }}
-          >
-            <Undo2 className="size-4" /> Undo sale
-          </Button>
-        )}
       </Card>
 
       {/* Advance */}
@@ -370,6 +363,13 @@ function ResultLot({ tournamentId, state }: { tournamentId: Id<'tournaments'>; s
         </Button>
         <p className="text-xs text-muted-foreground">
           Reveals the next player automatically. Once everyone has had a turn, unsold players come up again on their own.
+        </p>
+        <Button variant="secondary" onClick={() => void reopen()}>
+          <Undo2 className="size-4" /> Reopen lot to edit
+        </Button>
+        <p className="text-xs text-muted-foreground">
+          Made a mistake? Put {sold ? 'this sale' : 'this player'} back into live bidding to fix the winning team or
+          amount{sold ? ' (the team is refunded)' : ''}.
         </p>
         <Button variant="ghost" size="sm" className="self-start text-muted-foreground" onClick={() => void nextLot({ tournamentId })}>
           Pick from the list instead
