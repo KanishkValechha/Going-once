@@ -58,6 +58,31 @@ After the initial setup (<2 minutes) you'll have a working full-stack app using:
 
 6. Open [http://localhost:3000](http://localhost:3000) to see your app
 
+## Going Once — auction app
+
+This app runs offline sports/tournament auctions: an admin drives the bidding from the
+**Auction Console**, and a public, view-only **Live Screen** mirrors it in real time.
+
+### Grant admin access
+
+Admin status is bootstrapped from an allowlist read server-side by Convex. Set it on your
+Convex deployment (not in `.env.local`):
+
+```bash
+npx convex env set ADMIN_EMAILS "you@example.com,organizer@example.com"
+```
+
+The first time an allowlisted email signs in via WorkOS, their Convex user is created with the
+`admin` role. Admins can promote others in-app afterwards.
+
+### Routes
+
+- `/admin` — tournaments list and creation (WorkOS + admin role required)
+- `/admin/[tournamentId]` — manage teams, players, captains, and settings
+- `/admin/[tournamentId]/auction` — live auction control console
+- `/live?token=…` — public, view-only live screen (no login; gated by the tournament's
+  viewer token, shareable from the tournament Settings tab)
+
 ## WorkOS AuthKit Setup
 
 This app uses WorkOS AuthKit for authentication. Key features:
