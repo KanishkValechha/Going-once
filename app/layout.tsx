@@ -1,16 +1,19 @@
 import type { Metadata } from 'next';
-import { Geist, Geist_Mono } from 'next/font/google';
+import { Archivo, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
 import { ConvexClientProvider } from '@/components/ConvexClientProvider';
+import { Toaster } from '@/components/ui/sonner';
 import { withAuth } from '@workos-inc/authkit-nextjs';
 
-const geistSans = Geist({
-  variable: '--font-geist-sans',
+// Clean grotesque for everything — headings lean on weight, not all-caps.
+const archivo = Archivo({
+  variable: '--font-sans',
   subsets: ['latin'],
 });
 
-const geistMono = Geist_Mono({
-  variable: '--font-geist-mono',
+// Tabular mono for capability links and monospace fields.
+const jetbrainsMono = JetBrains_Mono({
+  variable: '--font-mono',
   subsets: ['latin'],
 });
 
@@ -27,8 +30,11 @@ export default async function RootLayout({
   const { accessToken } = await withAuth();
   return (
     <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+      <body
+        className={`${archivo.variable} ${jetbrainsMono.variable} antialiased`}
+      >
         <ConvexClientProvider expectAuth={!!accessToken}>{children}</ConvexClientProvider>
+        <Toaster />
       </body>
     </html>
   );

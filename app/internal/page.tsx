@@ -2,9 +2,17 @@
 
 import { useState } from 'react';
 import { useMutation, useQuery } from 'convex/react';
+import { Trash2, UserPlus } from 'lucide-react';
+import { toast } from 'sonner';
 import { api } from '@/convex/_generated/api';
 import type { Id, UserRole } from '@/types';
-import { Badge, Button, Card, Input, Label, Select, Spinner } from '@/components/ui';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Spinner } from '@/components/ui/spinner';
 
 export default function InternalHome() {
   const users = useQuery(api.users.listUsers);
@@ -13,10 +21,11 @@ export default function InternalHome() {
   return (
     <div className="flex flex-col gap-8">
       <div>
-        <h1 className="text-2xl font-bold">Portal access</h1>
-        <p className="text-sm text-muted">
-          Invite people into the admin portal and manage their roles. Admins can reach this internal
-          dashboard and every tournament; members only see the tournaments they&apos;re added to.
+        <p className="eyebrow">Super-admin</p>
+        <h1 className="display mt-1 text-4xl">Portal access</h1>
+        <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+          Invite people into the admin portal and manage their roles. Admins can reach this internal dashboard and
+          every tournament; members only see the tournaments they&apos;re added to.
         </p>
       </div>
 
@@ -25,7 +34,7 @@ export default function InternalHome() {
       {users === undefined ? (
         <Spinner />
       ) : (
-        <Card className="flex flex-col gap-1 p-0">
+        <Card className="overflow-hidden p-0">
           {users.map((u) => (
             <UserRow key={u._id} user={u} isSelf={me?._id === u._id} />
           ))}
@@ -47,41 +56,56 @@ function InviteUser() {
     setBusy(true);
     try {
       await invite({ email: trimmed, role });
+      toast.success(`${trimmed} invited`);
       setEmail('');
       setRole('member');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not invite');
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <Card className="flex flex-col gap-4">
-      <h2 className="font-semibold">Invite by email</h2>
-      <div className="grid gap-4 sm:grid-cols-[1fr_auto_auto] sm:items-end">
-        <div>
-          <Label>Email</Label>
-          <Input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="person@example.com"
-            onKeyDown={(e) => e.key === 'Enter' && void submit()}
-          />
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <UserPlus className="size-4 text-accent" /> Invite by email
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        <div className="grid gap-3 sm:grid-cols-[1fr_10rem_auto] sm:items-end">
+          <div>
+            <Label htmlFor="inv-email">Email</Label>
+            <Input
+              id="inv-email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="person@example.com"
+              onKeyDown={(e) => e.key === 'Enter' && void submit()}
+            />
+          </div>
+          <div>
+            <Label>Role</Label>
+            <Select value={role} onValueChange={(v) => setRole(v as UserRole)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="member">Member</SelectItem>
+                <SelectItem value="admin">Admin</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <Button onClick={() => void submit()} disabled={busy || !email.trim()}>
+            <UserPlus className="size-4" /> {busy ? 'Adding…' : 'Add'}
+          </Button>
         </div>
-        <div>
-          <Label>Role</Label>
-          <Select value={role} onChange={(e) => setRole(e.target.value as UserRole)}>
-            <option value="member">Member</option>
-            <option value="admin">Admin</option>
-          </Select>
-        </div>
-        <Button onClick={() => void submit()} disabled={busy || !email.trim()}>
-          {busy ? 'Adding…' : 'Add'}
-        </Button>
-      </div>
-      <p className="text-xs text-muted">
-        The person can sign in immediately; the invite links to their account on first login.
-      </p>
+        <p className="text-xs text-muted-foreground">
+          The person can sign in immediately; the invite links to their account on first login.
+        </p>
+      </CardContent>
     </Card>
   );
 }
@@ -98,27 +122,33 @@ function UserRow({
   const pending = !user.tokenIdentifier;
 
   return (
-    <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-3 last:border-0">
+    <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-3.5 last:border-0">
       <div className="min-w-0">
         <div className="flex items-center gap-2">
-          <span className="truncate text-sm font-medium">{user.email}</span>
-          {isSelf && <Badge tone="accent">You</Badge>}
-          {pending && <Badge tone="neutral">Pending</Badge>}
+          <span className="truncate text-sm font-semibold">{user.email}</span>
+          {isSelf && <Badge variant="accent">You</Badge>}
+          {pending && <Badge>Pending</Badge>}
         </div>
-        {user.name && <span className="text-xs text-muted">{user.name}</span>}
+        {user.name && <span className="text-xs text-muted-foreground">{user.name}</span>}
       </div>
       <div className="flex items-center gap-2">
         <Select
-          className="w-28"
           value={user.role}
           disabled={isSelf}
-          onChange={(e) => void setUserRole({ userId: user._id, role: e.target.value as UserRole })}
+          onValueChange={(v) => void setUserRole({ userId: user._id, role: v as UserRole })}
         >
-          <option value="member">Member</option>
-          <option value="admin">Admin</option>
+          <SelectTrigger size="sm" className="w-28">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="member">Member</SelectItem>
+            <SelectItem value="admin">Admin</SelectItem>
+          </SelectContent>
         </Select>
         <Button
-          variant="danger"
+          variant="ghost"
+          size="icon"
+          className="text-muted-foreground hover:text-destructive disabled:opacity-30"
           disabled={isSelf}
           onClick={() => {
             if (confirm(`Remove ${user.email}? This revokes all their access.`)) {
@@ -126,7 +156,7 @@ function UserRow({
             }
           }}
         >
-          Remove
+          <Trash2 className="size-4" />
         </Button>
       </div>
     </div>

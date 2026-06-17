@@ -5,12 +5,20 @@ import Link from 'next/link';
 import { useAtom } from 'jotai';
 import { useMutation, useQuery } from 'convex/react';
 import { FunctionReturnType } from 'convex/server';
+import { ArrowLeft, Check, ExternalLink, Shuffle, Undo2, X } from 'lucide-react';
+import { toast } from 'sonner';
 import { api } from '@/convex/_generated/api';
 import type { Id } from '@/types';
-import { Badge, Button, Card, Input, Spinner } from '@/components/ui';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Spinner } from '@/components/ui/spinner';
+import { AvatarImage } from '@/components/ui/avatar-image';
 import { formatAmount } from '@/helpers/format';
 import { buildLiveUrl } from '@/helpers/live';
 import { nextBid } from '@/convex/lib/increment';
+import { cn } from '@/lib/utils';
 import { overrideBidAtom, pendingActionAtom } from '@/jotai/auction';
 
 export default function AuctionConsolePage({ params }: { params: Promise<{ tournamentId: string }> }) {
@@ -18,28 +26,40 @@ export default function AuctionConsolePage({ params }: { params: Promise<{ tourn
   const id = tournamentId as Id<'tournaments'>;
   const state = useQuery(api.auction.consoleState, { tournamentId: id });
 
-  if (state === undefined) return <Spinner />;
-  if (state === null) return <p className="text-muted">Tournament not found.</p>;
+  if (state === undefined) return <Spinner label="Loading console…" />;
+  if (state === null) return <p className="text-muted-foreground">Tournament not found.</p>;
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <Link href={`/admin/${tournamentId}`} className="text-sm text-muted hover:text-foreground">
-            ← {state.tournament.name}
-          </Link>
-          <h1 className="text-xl font-bold">Auction Console</h1>
-          <Badge tone={state.tournament.status === 'live' ? 'accent' : 'neutral'}>{state.tournament.status}</Badge>
+      <div>
+        <Link
+          href={`/admin/${tournamentId}`}
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ArrowLeft className="size-3.5" /> {state.tournament.name}
+        </Link>
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <h1 className="display text-3xl">Auction Console</h1>
+            <Badge variant={state.tournament.status === 'live' ? 'live' : 'neutral'}>
+              {state.tournament.status === 'live' && (
+                <span className="size-1.5 animate-live-pulse rounded-full bg-live" />
+              )}
+              {state.tournament.status}
+            </Badge>
+          </div>
+          <a href={buildLiveUrl(state.tournament.viewerToken)} target="_blank" rel="noreferrer">
+            <Button variant="secondary">
+              <ExternalLink className="size-4" /> Live screen
+            </Button>
+          </a>
         </div>
-        <a href={buildLiveUrl(state.tournament.viewerToken)} target="_blank" rel="noreferrer">
-          <Button variant="secondary">Open live screen ↗</Button>
-        </a>
       </div>
 
       {state.tournament.status !== 'live' && (
-        <Card className="border-accent/40 text-sm text-muted">
+        <Card className="border-warning/40 bg-warning/5 p-4 text-sm text-muted-foreground">
           This tournament isn&apos;t live yet — the public screen won&apos;t show it. Go live from the tournament
-          Settings tab.
+          Overview tab.
         </Card>
       )}
 
@@ -56,62 +76,25 @@ export default function AuctionConsolePage({ params }: { params: Promise<{ tourn
   );
 }
 
-function TeamRosters({
-  teams,
-  rosterSize,
-}: {
-  teams: ConsoleState['teams'];
-  rosterSize: number;
-}) {
-  return (
-    <div className="flex flex-col gap-3">
-      <h3 className="text-sm font-semibold uppercase tracking-wide text-muted">Team rosters</h3>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {teams.map((t) => (
-          <Card key={t._id} className="flex flex-col gap-2">
-            <div className="flex items-baseline justify-between">
-              <span className="font-semibold">{t.name}</span>
-              <span className="tnum text-xs text-muted">
-                {t.playersWon}/{rosterSize}
-              </span>
-            </div>
-            {t.roster.length === 0 ? (
-              <p className="text-xs text-muted">No players yet.</p>
-            ) : (
-              <ul className="flex flex-col gap-1 text-sm">
-                {t.roster.map((p) => (
-                  <li key={p._id} className="flex justify-between gap-2">
-                    <span className="truncate">{p.name}</span>
-                    <span className="tnum text-muted">{formatAmount(p.soldPrice)}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 type ConsoleState = NonNullable<FunctionReturnType<typeof api.auction.consoleState>>;
 
 function RosterProgress({ state }: { state: ConsoleState }) {
   const { teamsFull, teamCount, rostersComplete, availablePlayers } = state;
   return (
     <Card
-      className={`flex flex-wrap items-center justify-between gap-2 text-sm ${
-        rostersComplete ? 'border-positive/40' : 'border-border'
-      }`}
+      className={cn(
+        'flex flex-wrap items-center justify-between gap-2 p-4 text-sm',
+        rostersComplete && 'border-positive/40',
+      )}
     >
-      <span className="flex items-center gap-2">
-        <Badge tone={rostersComplete ? 'positive' : 'neutral'}>
+      <span className="flex items-center gap-2.5">
+        <Badge variant={rostersComplete ? 'positive' : 'neutral'}>
           {teamsFull}/{teamCount} rosters full
         </Badge>
         {rostersComplete ? (
           <span className="text-positive">All teams have enough players — you can mark the tournament completed.</span>
         ) : (
-          <span className="text-muted">Keep the auction going until every team fills its roster.</span>
+          <span className="text-muted-foreground">Keep the auction going until every team fills its roster.</span>
         )}
       </span>
       {!rostersComplete && availablePlayers === 0 && (
@@ -149,81 +132,87 @@ function ActiveLot({ tournamentId, state }: { tournamentId: Id<'tournaments'>; s
   const leadingTeam = state.teams.find((t) => t._id === state.leadingTeamId);
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_1.2fr]">
+    <div className="grid gap-5 lg:grid-cols-[1fr_1.15fr]">
       {/* Active lot */}
-      <Card className="flex flex-col gap-4">
+      <Card className="relative flex flex-col gap-5 overflow-hidden p-6">
+        <div
+          className="pointer-events-none absolute -top-24 left-1/2 h-48 w-48 -translate-x-1/2 rounded-full bg-accent/20 blur-3xl"
+          aria-hidden
+        />
         <div className="flex items-center gap-4">
-          {player.imageUrl ? (
-            <img src={player.imageUrl} alt="" className="h-20 w-20 rounded-xl object-cover" />
-          ) : (
-            <div className="flex h-20 w-20 items-center justify-center rounded-xl bg-surface-2 text-2xl text-muted">
-              {player.name.charAt(0)}
-            </div>
-          )}
+          <AvatarImage src={player.imageUrl} name={player.name} className="size-20 rounded-2xl text-3xl" />
           <div>
-            <h2 className="text-2xl font-bold">{player.name}</h2>
-            <p className="text-sm text-muted">
+            <p className="eyebrow">Now on the block</p>
+            <h2 className="display text-3xl">{player.name}</h2>
+            <p className="text-sm text-muted-foreground">
               {player.role ? `${player.role} · ` : ''}base {formatAmount(player.basePrice)}
             </p>
           </div>
         </div>
 
-        <div className="rounded-xl bg-surface-2 p-5 text-center">
-          <p className="text-xs uppercase tracking-wide text-muted">Current bid</p>
-          <p className="tnum my-1 text-5xl font-bold text-accent">{formatAmount(state.currentBid)}</p>
-          <p className="text-sm text-muted">
-            {leadingTeam ? `Leading: ${leadingTeam.name}` : 'No bids yet'}
+        <div className="relative rounded-2xl border border-border bg-surface-2/60 p-6 text-center">
+          <p className="eyebrow">Current bid</p>
+          <p
+            key={`${state.bidCount}-${state.currentBid}`}
+            className="tnum display my-1 animate-bid-pop text-6xl text-accent"
+          >
+            {formatAmount(state.currentBid)}
+          </p>
+          <p className="text-sm font-semibold">
+            {leadingTeam ? (
+              <span className="text-foreground">Leading: {leadingTeam.name}</span>
+            ) : (
+              <span className="text-muted-foreground">No bids yet</span>
+            )}
           </p>
         </div>
 
-        <div className="flex flex-col gap-2">
-          <p className="text-xs text-muted">Next auto bid: {formatAmount(prospectiveBid)}</p>
-          <div className="flex gap-2">
-            <Input
-              type="number"
-              placeholder="Manual override amount"
-              value={override}
-              onChange={(e) => setOverride(e.target.value)}
-            />
-          </div>
-          <p className="text-[11px] text-muted">
-            Enter an amount above, then tap a team to register that exact bid instead of the auto step.
+        <div className="flex flex-col gap-1.5">
+          <Input
+            type="number"
+            placeholder="Manual override amount"
+            value={override}
+            onChange={(e) => setOverride(e.target.value)}
+          />
+          <p className="text-[11px] text-muted-foreground">
+            Next auto bid <span className="tnum text-foreground">{formatAmount(prospectiveBid)}</span>. Enter an amount
+            to register an exact bid instead.
           </p>
         </div>
 
         <div className="grid grid-cols-3 gap-2">
           <Button variant="secondary" onClick={() => void undoBid({ tournamentId })} disabled={state.bidCount === 0}>
-            Undo
+            <Undo2 className="size-4" /> Undo
           </Button>
-          <Button
-            variant="danger"
-            onClick={() => setPending(pending === 'unsold' ? null : 'unsold')}
-          >
-            Unsold
+          <Button variant="destructive" onClick={() => setPending(pending === 'unsold' ? null : 'unsold')}>
+            <X className="size-4" /> Unsold
           </Button>
-          <Button
-            onClick={() => setPending(pending === 'sold' ? null : 'sold')}
-            disabled={!state.leadingTeamId}
-          >
-            Sold
+          <Button onClick={() => setPending(pending === 'sold' ? null : 'sold')} disabled={!state.leadingTeamId}>
+            <Check className="size-4" /> Sold
           </Button>
         </div>
 
         {pending && (
-          <div className="flex items-center justify-between rounded-lg border border-border bg-surface-2 p-3 text-sm">
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-accent/40 bg-surface-2 p-3 text-sm">
             <span>
               {pending === 'sold'
                 ? `Sell to ${leadingTeam?.name} for ${formatAmount(state.currentBid)}?`
                 : 'Mark this player unsold?'}
             </span>
             <div className="flex gap-2">
-              <Button variant="ghost" onClick={() => setPending(null)}>
+              <Button variant="ghost" size="sm" onClick={() => setPending(null)}>
                 Cancel
               </Button>
               <Button
+                size="sm"
                 onClick={() => {
                   const action = pending === 'sold' ? markSold({ tournamentId }) : markUnsold({ tournamentId });
-                  void action.then(() => setPending(null));
+                  void action
+                    .then(() => {
+                      toast.success(pending === 'sold' ? `Sold to ${leadingTeam?.name}` : 'Marked unsold');
+                      setPending(null);
+                    })
+                    .catch((e) => toast.error(e instanceof Error ? e.message : 'Action failed'));
                 }}
               >
                 Confirm
@@ -235,7 +224,7 @@ function ActiveLot({ tournamentId, state }: { tournamentId: Id<'tournaments'>; s
 
       {/* Team bid buttons */}
       <div className="flex flex-col gap-3">
-        <p className="text-sm text-muted">Tap a team when they raise their hand to register a bid.</p>
+        <p className="eyebrow">Tap a team when they raise their hand</p>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           {state.teams.map((t) => {
             const useOverride = Number(override) > 0;
@@ -247,24 +236,26 @@ function ActiveLot({ tournamentId, state }: { tournamentId: Id<'tournaments'>; s
                 key={t._id}
                 disabled={cannotAfford}
                 onClick={() => (useOverride ? bidOverride(t._id) : bid(t._id))}
-                className={`flex flex-col items-start rounded-xl border p-4 text-left transition ${
+                className={cn(
+                  'flex flex-col items-start gap-0.5 rounded-xl border p-4 text-left transition-all active:scale-[0.98]',
                   isLeading
-                    ? 'border-accent bg-accent/10'
+                    ? 'border-accent bg-accent/10 shadow-[0_0_28px_-8px_color-mix(in_oklch,var(--accent)_60%,transparent)]'
                     : cannotAfford
-                      ? 'cursor-not-allowed border-danger/40 bg-danger/5 opacity-60'
-                      : 'border-border bg-surface hover:border-accent/60'
-                }`}
+                      ? 'cursor-not-allowed border-destructive/30 bg-destructive/5 opacity-60'
+                      : 'border-border bg-surface hover:-translate-y-0.5 hover:border-accent/60',
+                )}
               >
-                <span className="flex items-center gap-2 font-semibold">
-                  {t.name}
-                  {t.budgetStatus === 'low' && <Badge tone="warning">Low</Badge>}
-                  {t.budgetStatus === 'out' && <Badge tone="neutral">Out</Badge>}
+                <span className="flex w-full items-center justify-between gap-2 font-semibold">
+                  <span className="truncate">{t.name}</span>
+                  {t.budgetStatus === 'low' && <Badge variant="warning">Low</Badge>}
+                  {t.budgetStatus === 'out' && <Badge>Out</Badge>}
                 </span>
-                <span className="tnum text-sm text-muted">{formatAmount(t.remainingBudget)} left</span>
+                <span className="tnum text-sm text-muted-foreground">{formatAmount(t.remainingBudget)} left</span>
                 <span
-                  className={`tnum mt-1 text-xs ${
-                    cannotAfford ? 'text-danger' : t.budgetStatus === 'low' ? 'text-warning' : 'text-muted'
-                  }`}
+                  className={cn(
+                    'tnum text-xs',
+                    cannotAfford ? 'text-destructive' : t.budgetStatus === 'low' ? 'text-warning' : 'text-muted-foreground',
+                  )}
                 >
                   max {formatAmount(t.maxBid)}
                 </span>
@@ -290,16 +281,23 @@ function SelectPlayer({ tournamentId }: { tournamentId: Id<'tournaments'> }) {
     try {
       await selectRandomPlayer({ tournamentId });
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Could not pick a player');
+      toast.error(e instanceof Error ? e.message : 'Could not pick a player');
     }
   }
 
   return (
     <div className="flex flex-col gap-6">
-      <Card className="flex flex-col items-center gap-3 text-center">
-        <p className="text-muted">No active lot. Reveal the next player at random, or pick one manually below.</p>
-        <Button onClick={() => void revealRandom()} disabled={available.length === 0}>
-          🎲 Reveal random player
+      <Card className="relative flex flex-col items-center gap-4 overflow-hidden p-10 text-center">
+        <div
+          className="pointer-events-none absolute -top-20 left-1/2 h-48 w-72 -translate-x-1/2 rounded-full bg-accent/15 blur-3xl"
+          aria-hidden
+        />
+        <p className="display text-2xl">No active lot</p>
+        <p className="max-w-sm text-sm text-muted-foreground">
+          Reveal the next player at random for some drama, or pick one manually below.
+        </p>
+        <Button size="xl" onClick={() => void revealRandom()} disabled={available.length === 0}>
+          <Shuffle className="size-5" /> Reveal random player
         </Button>
       </Card>
 
@@ -310,7 +308,7 @@ function SelectPlayer({ tournamentId }: { tournamentId: Id<'tournaments'> }) {
       />
       {unsold.length > 0 && (
         <Section
-          title="Unsold (re-auction)"
+          title="Unsold · re-auction"
           players={unsold}
           onSelect={(playerId) => void selectPlayer({ tournamentId, playerId })}
         />
@@ -325,37 +323,70 @@ function Section({
   onSelect,
 }: {
   title: string;
-  players: { _id: Id<'players'>; name: string; role?: string; basePrice: number; imageUrl: string | null; isCaptain: boolean }[];
+  players: {
+    _id: Id<'players'>;
+    name: string;
+    role?: string;
+    basePrice: number;
+    imageUrl: string | null;
+    isCaptain: boolean;
+  }[];
   onSelect: (playerId: Id<'players'>) => void;
 }) {
-  if (players.length === 0) return <p className="text-sm text-muted">No {title.toLowerCase()} players.</p>;
+  if (players.length === 0) return <p className="text-sm text-muted-foreground">No {title.toLowerCase()} players.</p>;
   return (
     <div className="flex flex-col gap-3">
-      <h3 className="text-sm font-semibold uppercase tracking-wide text-muted">{title}</h3>
+      <h3 className="eyebrow">{title}</h3>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {players.map((p) => (
           <button
             key={p._id}
             onClick={() => onSelect(p._id)}
-            className="flex items-center gap-3 rounded-xl border border-border bg-surface p-3 text-left transition hover:border-accent/60"
+            className="flex items-center gap-3 rounded-xl border border-border bg-surface p-3 text-left transition-all hover:-translate-y-0.5 hover:border-accent/60 active:scale-[0.98]"
           >
-            {p.imageUrl ? (
-              <img src={p.imageUrl} alt="" className="h-12 w-12 rounded-lg object-cover" />
-            ) : (
-              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-surface-2 text-muted">
-                {p.name.charAt(0)}
-              </div>
-            )}
+            <AvatarImage src={p.imageUrl} name={p.name} className="size-12 rounded-lg" />
             <div className="min-w-0 flex-1">
-              <p className="flex items-center gap-2 truncate font-medium">
+              <p className="flex items-center gap-1.5 truncate font-semibold">
                 {p.name}
-                {p.isCaptain && <Badge tone="accent">C</Badge>}
+                {p.isCaptain && <Badge variant="accent">C</Badge>}
               </p>
-              <p className="tnum text-sm text-muted">
+              <p className="tnum text-sm text-muted-foreground">
                 {p.role ? `${p.role} · ` : ''}base {formatAmount(p.basePrice)}
               </p>
             </div>
           </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TeamRosters({ teams, rosterSize }: { teams: ConsoleState['teams']; rosterSize: number }) {
+  return (
+    <div className="flex flex-col gap-3">
+      <h3 className="eyebrow">Team rosters</h3>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {teams.map((t) => (
+          <Card key={t._id} className="flex flex-col gap-2 p-4">
+            <div className="flex items-baseline justify-between">
+              <span className="font-semibold">{t.name}</span>
+              <span className="tnum text-xs text-muted-foreground">
+                {t.playersWon}/{rosterSize}
+              </span>
+            </div>
+            {t.roster.length === 0 ? (
+              <p className="text-xs text-muted-foreground">No players yet.</p>
+            ) : (
+              <ul className="flex flex-col gap-1 text-sm">
+                {t.roster.map((p) => (
+                  <li key={p._id} className="flex justify-between gap-2">
+                    <span className="truncate">{p.name}</span>
+                    <span className="tnum text-muted-foreground">{formatAmount(p.soldPrice)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
         ))}
       </div>
     </div>

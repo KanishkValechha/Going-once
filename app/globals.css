@@ -1,43 +1,185 @@
 @import 'tailwindcss';
+@import 'tw-animate-css';
 
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+  Going Once — refined, calm dark theme with a confident indigo accent.
+  Deep neutral slate surfaces, off-white text, restrained contrast.
+*/
 :root {
-  --background: #0b0d12;
-  --surface: #14171f;
-  --surface-2: #1c2029;
-  --border: #2a2f3a;
-  --foreground: #f3f4f6;
-  --muted: #9aa3b2;
-  --accent: #f5b301;
-  --accent-foreground: #1a1205;
-  --positive: #34d399;
-  --danger: #f87171;
-  --warning: #fb923c;
+  color-scheme: dark;
+  --radius: 0.7rem;
+
+  --background: oklch(0.165 0.012 264);
+  --foreground: oklch(0.96 0.004 264);
+  --surface: oklch(0.205 0.014 264);
+  --surface-2: oklch(0.255 0.016 264);
+  --card: oklch(0.205 0.014 264);
+  --card-foreground: oklch(0.96 0.004 264);
+  --popover: oklch(0.225 0.015 264);
+  --popover-foreground: oklch(0.96 0.004 264);
+
+  --muted: oklch(0.255 0.016 264);
+  --muted-foreground: oklch(0.7 0.018 264);
+
+  --border: oklch(0.3 0.016 264);
+  --input: oklch(0.3 0.016 264);
+  --ring: oklch(0.62 0.19 277);
+
+  /* Signature accent — calm, confident indigo. */
+  --accent: oklch(0.62 0.19 277);
+  --accent-foreground: oklch(0.99 0 0);
+  --primary: oklch(0.62 0.19 277);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.255 0.016 264);
+  --secondary-foreground: oklch(0.96 0.004 264);
+
+  --positive: oklch(0.74 0.16 155);
+  --positive-foreground: oklch(0.16 0.04 155);
+  --destructive: oklch(0.66 0.2 22);
+  --destructive-foreground: oklch(0.99 0 0);
+  --warning: oklch(0.79 0.15 70);
+  --warning-foreground: oklch(0.24 0.05 70);
+  --live: oklch(0.68 0.2 22);
 }
 
 @theme inline {
   --color-background: var(--background);
+  --color-foreground: var(--foreground);
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
-  --color-border: var(--border);
-  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
   --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+
   --color-positive: var(--positive);
-  --color-danger: var(--danger);
+  --color-positive-foreground: var(--positive-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
   --color-warning: var(--warning);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-live: var(--live);
+
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --animate-bid-pop: bid-pop 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+  --animate-rise: rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-live-pulse: live-pulse 1.6s ease-in-out infinite;
 }
 
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  body {
+    color: var(--foreground);
+    background-color: var(--background);
+    background-image: radial-gradient(
+      55rem 38rem at 50% -18%,
+      color-mix(in oklch, var(--accent) 7%, transparent),
+      transparent 62%
+    );
+    background-attachment: fixed;
+    font-family: var(--font-sans), system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection {
+    background: color-mix(in oklch, var(--accent) 22%, transparent);
+  }
+
+  /* Strip the clashing native number-input spinners; we drive amounts by keyboard. */
+  input[type='number']::-webkit-outer-spin-button,
+  input[type='number']::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type='number'] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
 }
 
-/* Tabular numbers keep live bid amounts from jittering as they change. */
-.tnum {
-  font-variant-numeric: tabular-nums;
-  font-family: var(--font-geist-mono), monospace;
+@layer components {
+  /* Tabular numerals keep live bid amounts from jittering as they change. */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum';
+  }
+
+  /* Clean, confident heading — tight tracking and heavy weight, no shouting. */
+  .display {
+    font-family: var(--font-sans), system-ui, sans-serif;
+    font-weight: 800;
+    letter-spacing: -0.022em;
+    line-height: 1.05;
+  }
+
+  .eyebrow {
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    color: var(--muted-foreground);
+  }
+}
+
+@keyframes bid-pop {
+  0% {
+    transform: scale(0.78);
+    opacity: 0;
+    filter: blur(3px);
+  }
+  60% {
+    transform: scale(1.06);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+
+@keyframes rise {
+  from {
+    transform: translateY(12px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes live-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 color-mix(in oklch, var(--live) 55%, transparent);
+  }
+  50% {
+    opacity: 0.65;
+    box-shadow: 0 0 0 5px color-mix(in oklch, var(--live) 0%, transparent);
+  }
 }

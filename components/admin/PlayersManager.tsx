@@ -2,17 +2,27 @@
 
 import { useRef, useState } from 'react';
 import { useMutation, useQuery } from 'convex/react';
+import { Crown, ImagePlus, Plus, Trash2, Users2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { api } from '@/convex/_generated/api';
-import type { Id } from '@/types';
-import { Badge, Button, Card, Input, Label, Spinner } from '@/components/ui';
+import type { Id, PlayerStatus } from '@/types';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Spinner } from '@/components/ui/spinner';
+import { AvatarImage } from '@/components/ui/avatar-image';
 import { formatAmount } from '@/helpers/format';
 import { uploadFile } from '@/helpers/upload';
+import { EmptyHint } from '@/components/admin/TeamsManager';
 
-const statusTone = {
+const statusVariant: Record<PlayerStatus, 'neutral' | 'positive' | 'destructive'> = {
   available: 'neutral',
   sold: 'positive',
-  unsold: 'danger',
-} as const;
+  unsold: 'destructive',
+};
 
 export function PlayersManager({ tournamentId }: { tournamentId: Id<'tournaments'> }) {
   const players = useQuery(api.players.listByTournament, { tournamentId });
@@ -45,81 +55,102 @@ export function PlayersManager({ tournamentId }: { tournamentId: Id<'tournaments
         isCaptain,
         imageStorageId,
       });
+      toast.success(`${name.trim()} added`);
       setName('');
       setRole('');
       setBasePrice('');
       setIsCaptain(false);
       if (fileRef.current) fileRef.current.value = '';
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not add player');
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <Card className="flex flex-col gap-4">
-        <h3 className="font-semibold">Add player</h3>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid gap-5 lg:grid-cols-[20rem_1fr]">
+      <Card className="h-fit lg:sticky lg:top-24">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Users2 className="size-4 text-accent" /> Add player
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
           <div>
-            <Label>Name</Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="A. Sharma" />
+            <Label htmlFor="p-name">Name</Label>
+            <Input id="p-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="A. Sharma" />
           </div>
           <div>
-            <Label>Role / category</Label>
-            <Input value={role} onChange={(e) => setRole(e.target.value)} placeholder="All-rounder" />
+            <Label htmlFor="p-role">Role / category</Label>
+            <Input id="p-role" value={role} onChange={(e) => setRole(e.target.value)} placeholder="All-rounder" />
           </div>
           <div>
-            <Label>Base price</Label>
-            <Input type="number" value={basePrice} onChange={(e) => setBasePrice(e.target.value)} />
+            <Label htmlFor="p-base">Base price</Label>
+            <Input
+              id="p-base"
+              type="number"
+              value={basePrice}
+              onChange={(e) => setBasePrice(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && void submit()}
+              placeholder="500"
+            />
           </div>
           <div>
-            <Label>Image (optional)</Label>
+            <Label>
+              <ImagePlus className="size-3.5" /> Photo
+            </Label>
             <Input ref={fileRef} type="file" accept="image/*" />
           </div>
-        </div>
-        <label className="flex items-center gap-2 text-sm text-muted">
-          <input type="checkbox" checked={isCaptain} onChange={(e) => setIsCaptain(e.target.checked)} />
-          Mark as captain
-        </label>
-        <div>
+          <label className="flex cursor-pointer items-center gap-2.5 text-sm text-muted-foreground">
+            <Checkbox checked={isCaptain} onCheckedChange={(c) => setIsCaptain(c === true)} />
+            <span className="flex items-center gap-1.5">
+              <Crown className="size-3.5 text-accent" /> Mark as captain
+            </span>
+          </label>
           <Button onClick={() => void submit()} disabled={busy || !name.trim() || !basePrice}>
-            {busy ? 'Adding…' : 'Add player'}
+            <Plus className="size-4" /> {busy ? 'Adding…' : 'Add player'}
           </Button>
-        </div>
+        </CardContent>
       </Card>
 
-      {players === undefined ? (
-        <Spinner />
-      ) : players.length === 0 ? (
-        <p className="text-sm text-muted">No players yet.</p>
-      ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {players.map((p) => (
-            <Card key={p._id} className="flex items-center gap-3">
-              {p.imageUrl ? (
-                <img src={p.imageUrl} alt="" className="h-12 w-12 rounded-lg object-cover" />
-              ) : (
-                <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-surface-2 text-muted">
-                  {p.name.charAt(0)}
+      <div>
+        {players === undefined ? (
+          <Spinner />
+        ) : players.length === 0 ? (
+          <EmptyHint label="No players yet — add your first on the left." />
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {players.map((p) => (
+              <Card key={p._id} className="group flex items-center gap-3 p-3">
+                <AvatarImage src={p.imageUrl} name={p.name} className="size-12 rounded-lg text-xl" />
+                <div className="min-w-0 flex-1">
+                  <p className="flex items-center gap-1.5 truncate font-semibold">
+                    {p.name}
+                    {p.isCaptain && (
+                      <Crown className="size-3.5 shrink-0 text-accent" aria-label="Captain" />
+                    )}
+                  </p>
+                  <p className="tnum text-sm text-muted-foreground">
+                    {p.role ? `${p.role} · ` : ''}base {formatAmount(p.basePrice)}
+                  </p>
                 </div>
-              )}
-              <div className="min-w-0 flex-1">
-                <p className="flex items-center gap-2 truncate font-medium">
-                  {p.name}
-                  {p.isCaptain && <Badge tone="accent">C</Badge>}
-                </p>
-                <p className="tnum text-sm text-muted">
-                  {p.role ? `${p.role} · ` : ''}base {formatAmount(p.basePrice)}
-                </p>
-              </div>
-              <Badge tone={statusTone[p.status]}>{p.status}</Badge>
-              <Button variant="danger" onClick={() => void remove({ playerId: p._id })}>
-                ✕
-              </Button>
-            </Card>
-          ))}
-        </div>
-      )}
+                <Badge variant={statusVariant[p.status]}>{p.status}</Badge>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+                  onClick={() => {
+                    if (confirm(`Remove ${p.name}?`)) void remove({ playerId: p._id });
+                  }}
+                >
+                  <Trash2 className="size-4" />
+                </Button>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -6,15 +6,20 @@ import { useQuery } from 'convex/react';
 import { FunctionReturnType } from 'convex/server';
 import { api } from '@/convex/_generated/api';
 import { formatAmount, remainingSlots } from '@/helpers/format';
+import { AvatarImage } from '@/components/ui/avatar-image';
+import { Wordmark } from '@/components/Wordmark';
+import { cn } from '@/lib/utils';
 
 type Ticker = Extract<FunctionReturnType<typeof api.auction.liveTicker>, { phase: 'bidding' }>;
 type Board = Extract<FunctionReturnType<typeof api.auction.liveBoard>, { valid: true }>;
 
 export default function LivePage() {
   return (
-    <Suspense fallback={<Center>Loading…</Center>}>
-      <LiveScreen />
-    </Suspense>
+    <div className="min-h-screen">
+      <Suspense fallback={<Center>Loading…</Center>}>
+        <LiveScreen />
+      </Suspense>
+    </div>
   );
 }
 
@@ -32,19 +37,37 @@ function LiveScreen() {
   return (
     <div className="min-h-screen p-6 lg:p-10">
       <header className="mb-8 flex items-center justify-between">
-        <span className="text-sm font-semibold uppercase tracking-[0.3em] text-accent">Going Once</span>
-        <h1 className="text-xl font-semibold text-muted">{board.tournamentName}</h1>
+        <Wordmark size="lg" />
+        <div className="flex items-center gap-3">
+          <span className="flex items-center gap-2 rounded-full border border-live/50 bg-live/10 px-3 py-1 text-xs font-bold uppercase tracking-widest text-live">
+            <span className="size-2 animate-live-pulse rounded-full bg-live" /> Live
+          </span>
+          <h1 className="display text-2xl text-muted-foreground">{board.tournamentName}</h1>
+        </div>
       </header>
 
       {ticker.phase === 'bidding' ? (
-        <div className="grid gap-8 lg:grid-cols-[1.4fr_1fr]">
+        <div className="grid gap-6 lg:grid-cols-[1.5fr_1fr]">
           <ActivePanel ticker={ticker} />
           <TeamBoard board={board} compact />
         </div>
       ) : (
-        <div className="flex flex-col gap-8">
-          <div className="rounded-2xl border border-border bg-surface p-10 text-center">
-            <p className="text-2xl font-semibold text-muted">Waiting for the next player…</p>
+        <div className="flex flex-col gap-6">
+          <div className="relative flex flex-col items-center gap-3 overflow-hidden rounded-3xl border border-border bg-surface py-20 text-center">
+            <div
+              className="pointer-events-none absolute -top-24 left-1/2 h-56 w-96 -translate-x-1/2 rounded-full bg-accent/15 blur-3xl"
+              aria-hidden
+            />
+            <span className="flex gap-1.5">
+              {[0, 1, 2].map((i) => (
+                <span
+                  key={i}
+                  className="size-2.5 animate-bounce rounded-full bg-accent/70"
+                  style={{ animationDelay: `${i * 150}ms` }}
+                />
+              ))}
+            </span>
+            <p className="display text-4xl">Waiting for the next player</p>
           </div>
           <TeamBoard board={board} />
         </div>
@@ -55,37 +78,44 @@ function LiveScreen() {
 
 function ActivePanel({ ticker }: { ticker: Ticker }) {
   return (
-    <div className="flex flex-col gap-6 rounded-2xl border border-border bg-surface p-8">
-      <div className="flex items-center gap-6">
-        {ticker.player?.imageUrl ? (
-          <img src={ticker.player.imageUrl} alt="" className="h-32 w-32 rounded-2xl object-cover" />
-        ) : (
-          <div className="flex h-32 w-32 items-center justify-center rounded-2xl bg-surface-2 text-5xl text-muted">
-            {ticker.player?.name.charAt(0) ?? '?'}
-          </div>
-        )}
+    <div className="relative flex flex-col gap-8 overflow-hidden rounded-3xl border border-border bg-surface p-8 lg:p-10">
+      <div
+        className="pointer-events-none absolute -top-32 left-1/2 h-72 w-[36rem] -translate-x-1/2 rounded-full bg-accent/20 blur-[100px]"
+        aria-hidden
+      />
+      <div className="relative flex items-center gap-6">
+        <AvatarImage
+          src={ticker.player?.imageUrl}
+          name={ticker.player?.name ?? '?'}
+          className="size-32 rounded-3xl text-6xl"
+        />
         <div>
-          <p className="text-sm uppercase tracking-wide text-muted">Now on the block</p>
-          <h2 className="text-5xl font-bold">{ticker.player?.name}</h2>
-          <p className="mt-2 text-lg text-muted">
+          <p className="eyebrow">Now on the block</p>
+          <h2 className="display text-6xl lg:text-7xl">{ticker.player?.name}</h2>
+          <p className="mt-2 text-lg text-muted-foreground">
             {ticker.player?.role ? `${ticker.player.role} · ` : ''}base {formatAmount(ticker.player?.basePrice)}
           </p>
         </div>
       </div>
 
-      <div className="rounded-2xl bg-surface-2 p-8 text-center">
-        <p className="text-sm uppercase tracking-[0.2em] text-muted">Current bid</p>
-        <p className="tnum my-2 text-7xl font-black text-accent lg:text-8xl">{formatAmount(ticker.currentBid)}</p>
+      <div className="relative rounded-3xl border border-border bg-surface-2/70 p-8 text-center lg:p-10">
+        <p className="eyebrow">Current bid</p>
+        <p
+          key={ticker.currentBid ?? 0}
+          className="tnum display my-3 animate-bid-pop text-8xl text-accent lg:text-9xl"
+        >
+          {formatAmount(ticker.currentBid)}
+        </p>
         <p className="text-2xl font-semibold">
           {ticker.leadingTeam ? (
             <span className="inline-flex items-center gap-3">
               {ticker.leadingTeam.logoUrl && (
-                <img src={ticker.leadingTeam.logoUrl} alt="" className="h-8 w-8 rounded-md object-cover" />
+                <AvatarImage src={ticker.leadingTeam.logoUrl} name={ticker.leadingTeam.name} className="size-9 rounded-lg" />
               )}
               {ticker.leadingTeam.name}
             </span>
           ) : (
-            <span className="text-muted">Awaiting first bid</span>
+            <span className="text-muted-foreground">Awaiting first bid</span>
           )}
         </p>
       </div>
@@ -95,31 +125,33 @@ function ActivePanel({ ticker }: { ticker: Ticker }) {
 
 function TeamBoard({ board, compact = false }: { board: Board; compact?: boolean }) {
   return (
-    <div className={`grid gap-3 ${compact ? 'grid-cols-1' : 'grid-cols-2 lg:grid-cols-3'}`}>
+    <div className={cn('grid gap-3', compact ? 'grid-cols-1' : 'grid-cols-2 lg:grid-cols-3')}>
       {board.teams.map((t) => (
-        <div key={t._id} className="flex items-center gap-3 rounded-xl border border-border bg-surface p-4">
-          {t.logoUrl ? (
-            <img src={t.logoUrl} alt="" className="h-10 w-10 rounded-lg object-cover" />
-          ) : (
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-surface-2 text-muted">
-              {t.name.charAt(0)}
-            </div>
-          )}
+        <div
+          key={t._id}
+          className="flex items-center gap-3 rounded-2xl border border-border bg-surface p-4 transition-colors"
+        >
+          <AvatarImage src={t.logoUrl} name={t.name} className="size-11 rounded-xl" />
           <div className="min-w-0 flex-1">
             <p className="truncate font-semibold">{t.name}</p>
-            <p className="text-xs text-muted">
+            <p className="text-xs text-muted-foreground">
               {t.playersWon} / {board.rosterSize} · {remainingSlots(board.rosterSize, t.playersWon)} slots left
             </p>
             {!compact && t.roster.length > 0 && (
-              <p className="mt-1 truncate text-xs text-muted">
+              <p className="mt-1 truncate text-xs text-muted-foreground">
                 {t.roster.map((p) => p.name).join(', ')}
               </p>
             )}
           </div>
           <p
-            className={`tnum text-right text-lg font-bold ${
-              t.budgetStatus === 'low' ? 'text-warning' : t.budgetStatus === 'out' ? 'text-muted' : 'text-accent'
-            }`}
+            className={cn(
+              'tnum display text-right text-2xl',
+              t.budgetStatus === 'low'
+                ? 'text-warning'
+                : t.budgetStatus === 'out'
+                  ? 'text-muted-foreground'
+                  : 'text-accent',
+            )}
           >
             {formatAmount(t.remainingBudget)}
           </p>
@@ -131,6 +163,9 @@ function TeamBoard({ board, compact = false }: { board: Board; compact?: boolean
 
 function Center({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-screen items-center justify-center px-6 text-center text-xl text-muted">{children}</div>
+    <div className="flex min-h-screen flex-col items-center justify-center gap-6 px-6 text-center">
+      <Wordmark size="lg" />
+      <p className="text-xl text-muted-foreground">{children}</p>
+    </div>
   );
 }

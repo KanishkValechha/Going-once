@@ -1,63 +1,93 @@
 'use client';
 
-import { use, useState } from 'react';
+import { use } from 'react';
 import Link from 'next/link';
 import { useQuery } from 'convex/react';
+import { ArrowLeft, Crown, LayoutDashboard, Radio, Shield, Users, Users2 } from 'lucide-react';
 import { api } from '@/convex/_generated/api';
 import type { Id } from '@/types';
-import { Badge, Button, Spinner } from '@/components/ui';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Spinner } from '@/components/ui/spinner';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TeamsManager } from '@/components/admin/TeamsManager';
 import { PlayersManager } from '@/components/admin/PlayersManager';
 import { CaptainsManager } from '@/components/admin/CaptainsManager';
-import { TournamentSettings } from '@/components/admin/TournamentSettings';
 import { TournamentMembers } from '@/components/admin/TournamentMembers';
-
-const TABS = ['Teams', 'Players', 'Captains', 'Members', 'Settings'] as const;
-type Tab = (typeof TABS)[number];
+import { TournamentOverview } from '@/components/admin/TournamentOverview';
 
 export default function TournamentHub({ params }: { params: Promise<{ tournamentId: string }> }) {
   const { tournamentId } = use(params);
   const id = tournamentId as Id<'tournaments'>;
   const tournament = useQuery(api.tournaments.get, { tournamentId: id });
-  const [tab, setTab] = useState<Tab>('Teams');
 
-  if (tournament === undefined) return <Spinner />;
-  if (tournament === null) return <p className="text-muted">Tournament not found.</p>;
+  if (tournament === undefined)
+    return <Spinner label="Loading tournament…" />;
+  if (tournament === null)
+    return <p className="text-muted-foreground">Tournament not found.</p>;
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <Link href="/admin" className="text-sm text-muted hover:text-foreground">
-            ← All tournaments
-          </Link>
-          <h1 className="text-2xl font-bold">{tournament.name}</h1>
-          <Badge tone={tournament.status === 'live' ? 'accent' : 'neutral'}>{tournament.status}</Badge>
-        </div>
-        <Link href={`/admin/${tournamentId}/auction`}>
-          <Button>Open Auction Console →</Button>
+    <div className="flex flex-col gap-8">
+      <div>
+        <Link
+          href="/admin"
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ArrowLeft className="size-3.5" /> All tournaments
         </Link>
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <h1 className="display text-4xl">{tournament.name}</h1>
+            <Badge variant={tournament.status === 'live' ? 'live' : tournament.status === 'completed' ? 'positive' : 'neutral'}>
+              {tournament.status === 'live' && (
+                <span className="size-1.5 animate-live-pulse rounded-full bg-live" />
+              )}
+              {tournament.status}
+            </Badge>
+          </div>
+          <Link href={`/admin/${tournamentId}/auction`}>
+            <Button size="lg" variant={tournament.status === 'live' ? 'default' : 'secondary'}>
+              <Radio className="size-4" /> Auction console
+            </Button>
+          </Link>
+        </div>
       </div>
 
-      <div className="flex gap-1 border-b border-border">
-        {TABS.map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`-mb-px border-b-2 px-4 py-2 text-sm transition ${
-              tab === t ? 'border-accent text-foreground' : 'border-transparent text-muted hover:text-foreground'
-            }`}
-          >
-            {t}
-          </button>
-        ))}
-      </div>
+      <Tabs defaultValue="overview">
+        <TabsList className="flex-wrap">
+          <TabsTrigger value="overview">
+            <LayoutDashboard className="size-4" /> Overview
+          </TabsTrigger>
+          <TabsTrigger value="teams">
+            <Shield className="size-4" /> Teams
+          </TabsTrigger>
+          <TabsTrigger value="players">
+            <Users2 className="size-4" /> Players
+          </TabsTrigger>
+          <TabsTrigger value="captains">
+            <Crown className="size-4" /> Captains
+          </TabsTrigger>
+          <TabsTrigger value="members">
+            <Users className="size-4" /> Members
+          </TabsTrigger>
+        </TabsList>
 
-      {tab === 'Teams' && <TeamsManager tournamentId={id} />}
-      {tab === 'Players' && <PlayersManager tournamentId={id} />}
-      {tab === 'Captains' && <CaptainsManager tournamentId={id} />}
-      {tab === 'Members' && <TournamentMembers tournamentId={id} />}
-      {tab === 'Settings' && <TournamentSettings tournament={tournament} />}
+        <TabsContent value="overview">
+          <TournamentOverview tournament={tournament} />
+        </TabsContent>
+        <TabsContent value="teams">
+          <TeamsManager tournamentId={id} />
+        </TabsContent>
+        <TabsContent value="players">
+          <PlayersManager tournamentId={id} />
+        </TabsContent>
+        <TabsContent value="captains">
+          <CaptainsManager tournamentId={id} />
+        </TabsContent>
+        <TabsContent value="members">
+          <TournamentMembers tournamentId={id} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

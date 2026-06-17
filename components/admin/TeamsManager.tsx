@@ -2,9 +2,16 @@
 
 import { useRef, useState } from 'react';
 import { useMutation, useQuery } from 'convex/react';
+import { ImagePlus, Plus, Shield, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { api } from '@/convex/_generated/api';
 import type { Id } from '@/types';
-import { Button, Card, Input, Label, Spinner } from '@/components/ui';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Spinner } from '@/components/ui/spinner';
+import { AvatarImage } from '@/components/ui/avatar-image';
 import { formatAmount } from '@/helpers/format';
 import { uploadFile } from '@/helpers/upload';
 
@@ -35,67 +42,97 @@ export function TeamsManager({ tournamentId }: { tournamentId: Id<'tournaments'>
         budget: budget ? Number(budget) : undefined,
         logoStorageId,
       });
+      toast.success(`${name.trim()} added`);
       setName('');
       setBudget('');
       if (fileRef.current) fileRef.current.value = '';
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not add team');
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <Card className="flex flex-col gap-4">
-        <h3 className="font-semibold">Add team</h3>
-        <div className="grid gap-4 sm:grid-cols-3">
+    <div className="grid gap-5 lg:grid-cols-[20rem_1fr]">
+      <Card className="h-fit lg:sticky lg:top-24">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Shield className="size-4 text-accent" /> Add team
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
           <div>
-            <Label>Team name</Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Royal Strikers" />
+            <Label htmlFor="team-name">Team name</Label>
+            <Input
+              id="team-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && void submit()}
+              placeholder="Royal Strikers"
+            />
           </div>
           <div>
-            <Label>Budget (optional)</Label>
-            <Input type="number" value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="default" />
+            <Label htmlFor="team-budget">Budget</Label>
+            <Input
+              id="team-budget"
+              type="number"
+              value={budget}
+              onChange={(e) => setBudget(e.target.value)}
+              placeholder="Tournament default"
+            />
           </div>
           <div>
-            <Label>Logo (optional)</Label>
+            <Label>
+              <ImagePlus className="size-3.5" /> Logo
+            </Label>
             <Input ref={fileRef} type="file" accept="image/*" />
           </div>
-        </div>
-        <div>
           <Button onClick={() => void submit()} disabled={busy || !name.trim()}>
-            {busy ? 'Adding…' : 'Add team'}
+            <Plus className="size-4" /> {busy ? 'Adding…' : 'Add team'}
           </Button>
-        </div>
+        </CardContent>
       </Card>
 
-      {teams === undefined ? (
-        <Spinner />
-      ) : teams.length === 0 ? (
-        <p className="text-sm text-muted">No teams yet.</p>
-      ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {teams.map((t) => (
-            <Card key={t._id} className="flex items-center gap-3">
-              {t.logoUrl ? (
-                <img src={t.logoUrl} alt="" className="h-12 w-12 rounded-lg object-cover" />
-              ) : (
-                <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-surface-2 text-muted">
-                  {t.name.charAt(0)}
+      <div>
+        {teams === undefined ? (
+          <Spinner />
+        ) : teams.length === 0 ? (
+          <EmptyHint label="No teams yet — add your first on the left." />
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {teams.map((t) => (
+              <Card key={t._id} className="group flex items-center gap-3 p-3">
+                <AvatarImage src={t.logoUrl} name={t.name} className="size-12 rounded-lg text-xl" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-semibold">{t.name}</p>
+                  <p className="tnum text-sm text-muted-foreground">
+                    {formatAmount(t.remainingBudget)} left · {t.playersWon} won
+                  </p>
                 </div>
-              )}
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-medium">{t.name}</p>
-                <p className="tnum text-sm text-muted">
-                  {formatAmount(t.remainingBudget)} left · {t.playersWon} won
-                </p>
-              </div>
-              <Button variant="danger" onClick={() => void remove({ teamId: t._id })}>
-                ✕
-              </Button>
-            </Card>
-          ))}
-        </div>
-      )}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+                  onClick={() => {
+                    if (confirm(`Remove ${t.name}?`)) void remove({ teamId: t._id });
+                  }}
+                >
+                  <Trash2 className="size-4" />
+                </Button>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
+  );
+}
+
+export function EmptyHint({ label }: { label: string }) {
+  return (
+    <Card className="flex items-center justify-center border-dashed py-14 text-center text-sm text-muted-foreground">
+      {label}
+    </Card>
   );
 }

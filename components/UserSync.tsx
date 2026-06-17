@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { useConvexAuth, useMutation } from 'convex/react';
+import { useAction, useConvexAuth } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 
 /**
@@ -10,7 +10,7 @@ import { api } from '@/convex/_generated/api';
  */
 export function UserSync() {
   const { isAuthenticated } = useConvexAuth();
-  const syncUser = useMutation(api.users.syncUser);
+  const syncUser = useAction(api.users.syncUser);
   const synced = useRef(false);
 
   useEffect(() => {

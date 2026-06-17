@@ -89,12 +89,16 @@ export const get = query({
   },
 });
 
+// Sensible starting points so a new tournament can be created from just a name,
+// then fine-tuned in its setup screen.
+const DEFAULTS = { defaultBudget: 10000, rosterSize: 11, minBidIncrement: 100 } as const;
+
 export const create = mutation({
   args: {
     name: v.string(),
-    defaultBudget: v.number(),
-    rosterSize: v.number(),
-    minBidIncrement: v.number(),
+    defaultBudget: v.optional(v.number()),
+    rosterSize: v.optional(v.number()),
+    minBidIncrement: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const user = await requireUser(ctx);
@@ -102,9 +106,9 @@ export const create = mutation({
       name: args.name,
       status: 'draft',
       viewerToken: newViewerToken(),
-      defaultBudget: args.defaultBudget,
-      rosterSize: args.rosterSize,
-      minBidIncrement: args.minBidIncrement,
+      defaultBudget: args.defaultBudget ?? DEFAULTS.defaultBudget,
+      rosterSize: args.rosterSize ?? DEFAULTS.rosterSize,
+      minBidIncrement: args.minBidIncrement ?? DEFAULTS.minBidIncrement,
       createdBy: user._id,
     });
     await ensureAuctionState(ctx, tournamentId);

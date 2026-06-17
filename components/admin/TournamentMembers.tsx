@@ -2,9 +2,16 @@
 
 import { useState } from 'react';
 import { useMutation, useQuery } from 'convex/react';
+import { Trash2, UserPlus } from 'lucide-react';
+import { toast } from 'sonner';
 import { api } from '@/convex/_generated/api';
 import type { Id } from '@/types';
-import { Badge, Button, Card, Input, Label, Spinner } from '@/components/ui';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Spinner } from '@/components/ui/spinner';
 
 export function TournamentMembers({ tournamentId }: { tournamentId: Id<'tournaments'> }) {
   const members = useQuery(api.tournaments.listMembers, { tournamentId });
@@ -20,61 +27,71 @@ export function TournamentMembers({ tournamentId }: { tournamentId: Id<'tourname
     setBusy(true);
     try {
       await addMember({ tournamentId, email: trimmed });
+      toast.success(`${trimmed} added`);
       setEmail('');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not add member');
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <Card className="flex flex-col gap-4">
-        <div>
-          <h3 className="font-semibold">Add a member</h3>
-          <p className="text-sm text-muted">
-            Anyone added here can view and edit this tournament. New emails are invited to the portal
-            automatically and linked on their first login.
+    <div className="flex flex-col gap-5">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <UserPlus className="size-4 text-accent" /> Add a member
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          <p className="text-sm text-muted-foreground">
+            Anyone added here can view and edit this tournament. New emails are invited to the portal automatically and
+            linked on their first login.
           </p>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-[1fr_auto] sm:items-end">
-          <div>
-            <Label>Email</Label>
-            <Input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="person@example.com"
-              onKeyDown={(e) => e.key === 'Enter' && void add()}
-            />
+          <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+            <div>
+              <Label htmlFor="m-email">Email</Label>
+              <Input
+                id="m-email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="person@example.com"
+                onKeyDown={(e) => e.key === 'Enter' && void add()}
+              />
+            </div>
+            <Button onClick={() => void add()} disabled={busy || !email.trim()}>
+              <UserPlus className="size-4" /> {busy ? 'Adding…' : 'Add member'}
+            </Button>
           </div>
-          <Button onClick={() => void add()} disabled={busy || !email.trim()}>
-            {busy ? 'Adding…' : 'Add member'}
-          </Button>
-        </div>
+        </CardContent>
       </Card>
 
-      <Card className="flex flex-col gap-1 p-0">
+      <Card className="overflow-hidden p-0">
         {members === undefined ? (
           <Spinner />
         ) : members.length === 0 ? (
-          <p className="p-5 text-sm text-muted">No members yet.</p>
+          <p className="p-6 text-sm text-muted-foreground">No members yet.</p>
         ) : (
           members.map((m) => (
             <div
               key={m.membershipId}
-              className="flex items-center justify-between gap-3 border-b border-border px-5 py-3 last:border-0"
+              className="flex items-center justify-between gap-3 border-b border-border px-5 py-3.5 last:border-0"
             >
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="truncate text-sm font-medium">{m.email}</span>
-                  {m.role === 'admin' && <Badge tone="accent">Admin</Badge>}
-                  {m.isCreator && <Badge tone="neutral">Creator</Badge>}
-                  {m.pending && <Badge tone="neutral">Pending</Badge>}
+                  <span className="truncate text-sm font-semibold">{m.email}</span>
+                  {m.role === 'admin' && <Badge variant="accent">Admin</Badge>}
+                  {m.isCreator && <Badge>Creator</Badge>}
+                  {m.pending && <Badge>Pending</Badge>}
                 </div>
-                {m.name && <span className="text-xs text-muted">{m.name}</span>}
+                {m.name && <span className="text-xs text-muted-foreground">{m.name}</span>}
               </div>
               <Button
-                variant="danger"
+                variant="ghost"
+                size="icon"
+                className="text-muted-foreground hover:text-destructive disabled:opacity-30"
                 disabled={m.isCreator}
                 onClick={() => {
                   if (confirm(`Remove ${m.email} from this tournament?`)) {
@@ -82,7 +99,7 @@ export function TournamentMembers({ tournamentId }: { tournamentId: Id<'tourname
                   }
                 }}
               >
-                Remove
+                <Trash2 className="size-4" />
               </Button>
             </div>
           ))

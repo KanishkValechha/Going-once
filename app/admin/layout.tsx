@@ -4,24 +4,31 @@ import Link from 'next/link';
 import { ReactNode } from 'react';
 import { Authenticated, AuthLoading, Unauthenticated, useQuery } from 'convex/react';
 import { useAuth } from '@workos-inc/authkit-nextjs/components';
+import { Gavel, LogOut, ShieldHalf } from 'lucide-react';
 import { api } from '@/convex/_generated/api';
-import { Button, Card, Spinner } from '@/components/ui';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Spinner } from '@/components/ui/spinner';
+import { Wordmark } from '@/components/Wordmark';
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen">
       <AuthLoading>
-        <Spinner />
+        <div className="flex min-h-screen items-center justify-center">
+          <Spinner label="Authenticating…" />
+        </div>
       </AuthLoading>
       <Unauthenticated>
-        <div className="flex min-h-screen items-center justify-center">
-          <Card className="text-center">
-            <p className="mb-3 text-muted">You need to sign in to access the admin portal.</p>
+        <Gate
+          title="Sign in to continue"
+          body="You need to sign in to access the admin portal."
+          action={
             <a href="/sign-in">
               <Button>Sign in</Button>
             </a>
-          </Card>
-        </div>
+          }
+        />
       </Unauthenticated>
       <Authenticated>
         <AdminShell>{children}</AdminShell>
@@ -30,48 +37,71 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   );
 }
 
+function Gate({ title, body, action }: { title: string; body: string; action: ReactNode }) {
+  return (
+    <div className="flex min-h-screen items-center justify-center px-6">
+      <Card className="flex max-w-md flex-col items-center gap-4 p-8 text-center">
+        <div className="flex size-12 items-center justify-center rounded-2xl bg-accent/15 text-accent">
+          <Gavel className="size-6" />
+        </div>
+        <div>
+          <h2 className="display text-2xl">{title}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">{body}</p>
+        </div>
+        {action}
+      </Card>
+    </div>
+  );
+}
+
 function AdminShell({ children }: { children: ReactNode }) {
   const me = useQuery(api.users.currentUser);
   const { signOut } = useAuth();
 
-  if (me === undefined) return <Spinner />;
+  if (me === undefined)
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <Spinner />
+      </div>
+    );
 
   if (me === null) {
     return (
-      <div className="flex min-h-screen items-center justify-center px-6">
-        <Card className="max-w-md text-center">
-          <h2 className="mb-2 text-lg font-semibold">Portal access required</h2>
-          <p className="mb-4 text-sm text-muted">
-            Your account hasn&apos;t been granted access to the admin portal. Ask an organizer to add your email.
-          </p>
+      <Gate
+        title="Portal access required"
+        body="Your account hasn't been granted access to the admin portal. Ask an organizer to add your email."
+        action={
           <Button variant="secondary" onClick={() => void signOut()}>
-            Sign out
+            <LogOut className="size-4" /> Sign out
           </Button>
-        </Card>
-      </div>
+        }
+      />
     );
   }
 
   return (
     <>
-      <header className="sticky top-0 z-20 flex items-center justify-between border-b border-border bg-background/90 px-6 py-3 backdrop-blur">
-        <Link href="/admin" className="flex items-center gap-2">
-          <span className="text-sm font-semibold uppercase tracking-[0.25em] text-accent">Going Once</span>
-          <span className="text-xs text-muted">Admin</span>
-        </Link>
-        <div className="flex items-center gap-3 text-sm">
-          {me.role === 'admin' && (
-            <Link href="/internal" className="text-muted transition hover:text-foreground">
-              Internal
-            </Link>
-          )}
-          <span className="text-muted">{me.email}</span>
-          <Button variant="ghost" onClick={() => void signOut()}>
-            Sign out
-          </Button>
+      <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
+          <Link href="/admin">
+            <Wordmark sub="Admin" />
+          </Link>
+          <div className="flex items-center gap-2 text-sm">
+            {me.role === 'admin' && (
+              <Link href="/internal">
+                <Button variant="ghost" size="sm">
+                  <ShieldHalf className="size-4" /> Internal
+                </Button>
+              </Link>
+            )}
+            <span className="hidden text-xs text-muted-foreground sm:inline">{me.email}</span>
+            <Button variant="ghost" size="sm" onClick={() => void signOut()}>
+              <LogOut className="size-4" /> Sign out
+            </Button>
+          </div>
         </div>
       </header>
-      <main className="mx-auto max-w-6xl px-6 py-8">{children}</main>
+      <main className="mx-auto max-w-6xl px-6 py-10">{children}</main>
     </>
   );
 }

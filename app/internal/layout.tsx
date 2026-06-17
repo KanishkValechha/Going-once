@@ -4,24 +4,31 @@ import Link from 'next/link';
 import { ReactNode } from 'react';
 import { Authenticated, AuthLoading, Unauthenticated, useQuery } from 'convex/react';
 import { useAuth } from '@workos-inc/authkit-nextjs/components';
+import { Gavel, LayoutGrid, LogOut } from 'lucide-react';
 import { api } from '@/convex/_generated/api';
-import { Button, Card, Spinner } from '@/components/ui';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Spinner } from '@/components/ui/spinner';
+import { Wordmark } from '@/components/Wordmark';
 
 export default function InternalLayout({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen">
       <AuthLoading>
-        <Spinner />
+        <div className="flex min-h-screen items-center justify-center">
+          <Spinner label="Authenticating…" />
+        </div>
       </AuthLoading>
       <Unauthenticated>
-        <div className="flex min-h-screen items-center justify-center">
-          <Card className="text-center">
-            <p className="mb-3 text-muted">You need to sign in to access the internal dashboard.</p>
+        <Gate
+          title="Sign in to continue"
+          body="You need to sign in to access the internal dashboard."
+          action={
             <a href="/sign-in">
               <Button>Sign in</Button>
             </a>
-          </Card>
-        </div>
+          }
+        />
       </Unauthenticated>
       <Authenticated>
         <InternalShell>{children}</InternalShell>
@@ -30,51 +37,74 @@ export default function InternalLayout({ children }: { children: ReactNode }) {
   );
 }
 
+function Gate({ title, body, action }: { title: string; body: string; action: ReactNode }) {
+  return (
+    <div className="flex min-h-screen items-center justify-center px-6">
+      <Card className="flex max-w-md flex-col items-center gap-4 p-8 text-center">
+        <div className="flex size-12 items-center justify-center rounded-2xl bg-accent/15 text-accent">
+          <Gavel className="size-6" />
+        </div>
+        <div>
+          <h2 className="display text-2xl">{title}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">{body}</p>
+        </div>
+        {action}
+      </Card>
+    </div>
+  );
+}
+
 function InternalShell({ children }: { children: ReactNode }) {
   const me = useQuery(api.users.currentUser);
   const { signOut } = useAuth();
 
-  if (me === undefined) return <Spinner />;
+  if (me === undefined)
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <Spinner />
+      </div>
+    );
 
   if (me?.role !== 'admin') {
     return (
-      <div className="flex min-h-screen items-center justify-center px-6">
-        <Card className="max-w-md text-center">
-          <h2 className="mb-2 text-lg font-semibold">Internal access required</h2>
-          <p className="mb-4 text-sm text-muted">
-            The internal dashboard is restricted to super-admins.
-          </p>
-          <div className="flex justify-center gap-2">
+      <Gate
+        title="Internal access required"
+        body="The internal dashboard is restricted to super-admins."
+        action={
+          <div className="flex gap-2">
             <Link href="/admin">
               <Button variant="secondary">Go to admin</Button>
             </Link>
             <Button variant="ghost" onClick={() => void signOut()}>
-              Sign out
+              <LogOut className="size-4" /> Sign out
             </Button>
           </div>
-        </Card>
-      </div>
+        }
+      />
     );
   }
 
   return (
     <>
-      <header className="sticky top-0 z-20 flex items-center justify-between border-b border-border bg-background/90 px-6 py-3 backdrop-blur">
-        <Link href="/internal" className="flex items-center gap-2">
-          <span className="text-sm font-semibold uppercase tracking-[0.25em] text-accent">Going Once</span>
-          <span className="text-xs text-muted">Internal</span>
-        </Link>
-        <div className="flex items-center gap-3 text-sm">
-          <Link href="/admin" className="text-muted transition hover:text-foreground">
-            Admin
+      <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-4xl items-center justify-between px-6 py-3">
+          <Link href="/internal">
+            <Wordmark sub="Internal" />
           </Link>
-          <span className="text-muted">{me.email}</span>
-          <Button variant="ghost" onClick={() => void signOut()}>
-            Sign out
-          </Button>
+          <div className="flex items-center gap-2 text-sm">
+            <Link href="/admin">
+              <Button variant="ghost" size="sm">
+                <LayoutGrid className="size-4" /> Admin
+              </Button>
+            </Link>
+            <span className="hidden text-xs text-muted-foreground sm:inline">{me.email}</span>
+            <Button variant="ghost" size="sm" onClick={() => void signOut()}>
+              <LogOut className="size-4" /> Sign out
+            </Button>
+          </div>
         </div>
       </header>
-      <main className="mx-auto max-w-4xl px-6 py-8">{children}</main>
+      <main className="mx-auto max-w-4xl px-6 py-10">{children}</main>
     </>
   );
 }

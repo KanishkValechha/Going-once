@@ -1,35 +1,71 @@
 import { v } from 'convex/values';
-import { internalMutation, mutation, query, MutationCtx } from './_generated/server';
+import { action, internalMutation, mutation, query, MutationCtx } from './_generated/server';
+import { internal } from './_generated/api';
 import { Id } from './_generated/dataModel';
 import { getCurrentUser, requireSuperAdmin } from './lib/auth';
 
 const roleValidator = v.union(v.literal('admin'), v.literal('member'));
 
 /**
- * Idempotently link the authenticated WorkOS identity to its `users` row.
+ * Link the authenticated WorkOS identity to its `users` row.
  *
- * Access is invite-only: rows are pre-created by email (via `invite`/`grantRole`
- * or by being added to a tournament). On login we either find the row by its
- * stable `tokenIdentifier`, or link a pending invite by email. A visitor with no
- * invite gets no row — and therefore no portal access.
+ * The WorkOS access token does NOT carry the user's email, so we fetch the
+ * authoritative email from the WorkOS Management API using the verified
+ * `subject`. We never trust an email sent from the browser — that would let any
+ * logged-in user claim someone else's invite. The DB work runs in the
+ * `linkIdentity` internal mutation.
  */
-export const syncUser = mutation({
+export const syncUser = action({
   args: {},
   handler: async (ctx): Promise<Id<'users'> | null> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error('Unauthenticated');
 
-    const email = (identity.email ?? '').toLowerCase();
-    const name = identity.name ?? undefined;
+    const apiKey = process.env.WORKOS_API_KEY;
+    if (!apiKey) throw new Error('WORKOS_API_KEY is not configured');
+
+    const res = await fetch(`https://api.workos.com/user_management/users/${identity.subject}`, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    if (!res.ok) {
+      throw new Error(`WorkOS user lookup failed (${res.status})`);
+    }
+    const profile = (await res.json()) as {
+      email?: string;
+      first_name?: string;
+      last_name?: string;
+    };
+    const email = (profile.email ?? '').toLowerCase();
+    const name = [profile.first_name, profile.last_name].filter(Boolean).join(' ') || undefined;
+
+    return await ctx.runMutation(internal.users.linkIdentity, {
+      tokenIdentifier: identity.tokenIdentifier,
+      email,
+      name,
+    });
+  },
+});
+
+/**
+ * Internal: idempotently link a verified WorkOS identity to its `users` row.
+ * Access is invite-only — rows are pre-created by email (via `invite`/`grantRole`
+ * or by being added to a tournament). We find the row by stable
+ * `tokenIdentifier`, else link a pending invite by email. No matching row → no
+ * access. Never called directly from the client.
+ */
+export const linkIdentity = internalMutation({
+  args: { tokenIdentifier: v.string(), email: v.string(), name: v.optional(v.string()) },
+  handler: async (ctx, args): Promise<Id<'users'> | null> => {
+    const email = args.email.toLowerCase();
 
     // (1) Already linked: keep display fields fresh, never touch role here.
     const existing = await ctx.db
       .query('users')
-      .withIndex('by_tokenIdentifier', (q) => q.eq('tokenIdentifier', identity.tokenIdentifier))
+      .withIndex('by_tokenIdentifier', (q) => q.eq('tokenIdentifier', args.tokenIdentifier))
       .unique();
     if (existing) {
-      if (existing.email !== email || existing.name !== name) {
-        await ctx.db.patch('users', existing._id, { email, name });
+      if (existing.email !== email || existing.name !== args.name) {
+        await ctx.db.patch('users', existing._id, { email, name: args.name });
       }
       return existing._id;
     }
@@ -41,7 +77,10 @@ export const syncUser = mutation({
         .withIndex('by_email', (q) => q.eq('email', email))
         .unique();
       if (invited && !invited.tokenIdentifier) {
-        await ctx.db.patch('users', invited._id, { tokenIdentifier: identity.tokenIdentifier, name });
+        await ctx.db.patch('users', invited._id, {
+          tokenIdentifier: args.tokenIdentifier,
+          name: args.name,
+        });
         return invited._id;
       }
     }
