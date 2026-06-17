@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { AvatarImage } from '@/components/ui/avatar-image';
+import { formatAmount } from '@/helpers/format';
 import { uploadFile } from '@/helpers/upload';
 import { EmptyHint } from '@/components/admin/TeamsManager';
 
@@ -32,6 +33,7 @@ export function PlayersManager({ tournamentId }: { tournamentId: Id<'tournaments
   const [name, setName] = useState('');
   const [role, setRole] = useState('');
   const [isCaptain, setIsCaptain] = useState(false);
+  const [captainMinBid, setCaptainMinBid] = useState('');
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -50,12 +52,14 @@ export function PlayersManager({ tournamentId }: { tournamentId: Id<'tournaments
         name: name.trim(),
         role: role.trim() || undefined,
         isCaptain,
+        captainMinBid: isCaptain && captainMinBid ? Number(captainMinBid) : undefined,
         imageStorageId,
       });
       toast.success(`${name.trim()} added`);
       setName('');
       setRole('');
       setIsCaptain(false);
+      setCaptainMinBid('');
       if (fileRef.current) fileRef.current.value = '';
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not add player');
@@ -99,6 +103,19 @@ export function PlayersManager({ tournamentId }: { tournamentId: Id<'tournaments
               <Crown className="size-3.5 text-accent" /> Mark as captain
             </span>
           </label>
+          {isCaptain && (
+            <div>
+              <Label htmlFor="p-capmin">Captain minimum bid (optional)</Label>
+              <Input
+                id="p-capmin"
+                type="number"
+                value={captainMinBid}
+                onChange={(e) => setCaptainMinBid(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && void submit()}
+                placeholder="Defaults to the player minimum"
+              />
+            </div>
+          )}
           <Button onClick={() => void submit()} disabled={busy || !name.trim()}>
             <Plus className="size-4" /> {busy ? 'Adding…' : 'Add player'}
           </Button>
@@ -123,7 +140,8 @@ export function PlayersManager({ tournamentId }: { tournamentId: Id<'tournaments
                     )}
                   </p>
                   <p className="tnum text-sm text-muted-foreground">
-                    {p.role ? p.role : p.isCaptain ? 'Captain' : 'Player'}
+                    {p.role ? `${p.role}` : p.isCaptain ? 'Captain' : 'Player'}
+                    {p.isCaptain && p.captainMinBid ? ` · min ${formatAmount(p.captainMinBid)}` : ''}
                   </p>
                 </div>
                 <Badge variant={statusVariant[p.status]}>{p.status}</Badge>

@@ -1,18 +1,22 @@
 import { Doc } from '../_generated/dataModel';
 
-// Fallbacks for tournaments created before the tournament-wide minimum bids
-// existed (the fields are optional in the schema).
+// Fallback for tournaments created before the tournament-wide minimum bid
+// existed (the field is optional in the schema).
 export const DEFAULT_MIN_BID = 100;
-export const DEFAULT_CAPTAIN_MIN_BID = 1000;
+
+/** The tournament-wide minimum/opening bid for a regular (non-captain) player. */
+export function baseMinBid(tournament: Doc<'tournaments'>): number {
+  return tournament.minBid ?? DEFAULT_MIN_BID;
+}
 
 /**
- * The opening/minimum bid for a player: the tournament-wide `minBid`, or the
- * higher `captainMinBid` for captains. There is no per-player base price.
+ * The opening/minimum bid for a specific player: a captain uses its own
+ * `captainMinBid` (falling back to the tournament floor if unset), everyone else
+ * uses the tournament-wide `minBid`. There is no per-player base price.
  */
-export function playerMinBid(tournament: Doc<'tournaments'>, isCaptain: boolean): number {
-  return isCaptain
-    ? tournament.captainMinBid ?? DEFAULT_CAPTAIN_MIN_BID
-    : tournament.minBid ?? DEFAULT_MIN_BID;
+export function playerMinBid(tournament: Doc<'tournaments'>, player: Doc<'players'>): number {
+  if (player.isCaptain) return player.captainMinBid ?? baseMinBid(tournament);
+  return baseMinBid(tournament);
 }
 
 /**
@@ -26,7 +30,7 @@ export function playerMinBid(tournament: Doc<'tournaments'>, isCaptain: boolean)
 export function maxAffordableBid(team: Doc<'teams'>, tournament: Doc<'tournaments'>): number {
   const remainingSlots = tournament.rosterSize - team.playersWon;
   if (remainingSlots <= 0) return 0; // roster already full
-  const reserveForOtherSlots = (remainingSlots - 1) * playerMinBid(tournament, false);
+  const reserveForOtherSlots = (remainingSlots - 1) * baseMinBid(tournament);
   return team.remainingBudget - reserveForOtherSlots;
 }
 
@@ -48,6 +52,6 @@ export function budgetStatus(team: Doc<'teams'>, tournament: Doc<'tournaments'>)
   if (team.playersWon >= tournament.rosterSize) return 'out';
   const max = maxAffordableBid(team, tournament);
   if (max <= 0) return 'out';
-  if (max < playerMinBid(tournament, false) * 3) return 'low';
+  if (max < baseMinBid(tournament) * 3) return 'low';
   return 'ok';
 }

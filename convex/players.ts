@@ -25,6 +25,7 @@ export const create = mutation({
     tournamentId: v.id('tournaments'),
     name: v.string(),
     role: v.optional(v.string()),
+    captainMinBid: v.optional(v.number()),
     imageStorageId: v.optional(v.id('_storage')),
     isCaptain: v.optional(v.boolean()),
   },
@@ -37,12 +38,15 @@ export const create = mutation({
       .order('desc')
       .first();
     const sortOrder = (last?.sortOrder ?? 0) + 1;
+    const isCaptain = args.isCaptain ?? false;
     return await ctx.db.insert('players', {
       tournamentId: args.tournamentId,
       name: args.name,
       role: args.role,
+      // A per-captain minimum bid only applies to captains.
+      captainMinBid: isCaptain ? args.captainMinBid : undefined,
       imageStorageId: args.imageStorageId,
-      isCaptain: args.isCaptain ?? false,
+      isCaptain,
       status: 'available',
       sortOrder,
     });
@@ -54,6 +58,7 @@ export const update = mutation({
     playerId: v.id('players'),
     name: v.optional(v.string()),
     role: v.optional(v.string()),
+    captainMinBid: v.optional(v.number()),
     imageStorageId: v.optional(v.id('_storage')),
     isCaptain: v.optional(v.boolean()),
   },

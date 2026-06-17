@@ -27,10 +27,12 @@ export default defineSchema({
     defaultBudget: v.number(),
     rosterSize: v.number(),
     minBidIncrement: v.number(),
-    // Tournament-wide opening/minimum bid that applies to every player, with a
-    // separate higher floor for captains. Optional so tournaments created before
-    // these existed still validate; reads fall back to defaults.
+    // Tournament-wide opening/minimum bid that applies to every non-captain
+    // player. Optional so tournaments created before it existed still validate;
+    // reads fall back to a default.
     minBid: v.optional(v.number()),
+    // Legacy: superseded by the per-captain `players.captainMinBid`. Kept
+    // optional so older tournament docs that set it still validate. Unused.
     captainMinBid: v.optional(v.number()),
     createdBy: v.id('users'),
   })
@@ -62,9 +64,12 @@ export default defineSchema({
     tournamentId: v.id('tournaments'),
     name: v.string(),
     role: v.optional(v.string()),
-    // Per-player base price is no longer used — the opening bid comes from the
-    // tournament's `minBid`/`captainMinBid`. Kept optional for legacy rows.
+    // Per-player base price is no longer used — a regular player's opening bid
+    // comes from the tournament's `minBid`. Kept optional for legacy rows.
     basePrice: v.optional(v.number()),
+    // A captain's own minimum/opening bid. Only meaningful when `isCaptain`;
+    // falls back to the tournament `minBid` if unset.
+    captainMinBid: v.optional(v.number()),
     imageStorageId: v.optional(v.id('_storage')),
     isCaptain: v.boolean(),
     status: v.union(v.literal('available'), v.literal('sold'), v.literal('unsold')),

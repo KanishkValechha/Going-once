@@ -130,7 +130,7 @@ export const placeBid = mutation({
     const tournament = await ctx.db.get('tournaments', args.tournamentId);
     if (!tournament) throw new Error('Tournament missing');
 
-    const openingBid = playerMinBid(tournament, player.isCaptain);
+    const openingBid = playerMinBid(tournament, player);
     let amount: number;
     if (args.overrideAmount !== undefined) {
       const floor = state.currentBid ?? openingBid;
@@ -400,7 +400,7 @@ export const consoleState = query({
     const activePlayer = liveLot
       ? {
           ...liveLot,
-          minBid: playerMinBid(tournament, liveLot.isCaptain),
+          minBid: playerMinBid(tournament, liveLot),
           imageUrl: liveLot.imageStorageId ? await ctx.storage.getUrl(liveLot.imageStorageId) : null,
         }
       : null;
@@ -459,7 +459,7 @@ export const liveTicker = query({
       player: {
         name: player.name,
         role: player.role ?? null,
-        minBid: playerMinBid(tournament, player.isCaptain),
+        minBid: playerMinBid(tournament, player),
         imageUrl: player.imageStorageId ? await ctx.storage.getUrl(player.imageStorageId) : null,
       },
       leadingTeam: leadingTeam

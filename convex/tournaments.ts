@@ -120,7 +120,6 @@ const DEFAULTS = {
   rosterSize: 11,
   minBidIncrement: 100,
   minBid: 100,
-  captainMinBid: 1000,
 } as const;
 
 export const create = mutation({
@@ -130,7 +129,6 @@ export const create = mutation({
     rosterSize: v.optional(v.number()),
     minBidIncrement: v.optional(v.number()),
     minBid: v.optional(v.number()),
-    captainMinBid: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const user = await requireUser(ctx);
@@ -142,7 +140,6 @@ export const create = mutation({
       rosterSize: args.rosterSize ?? DEFAULTS.rosterSize,
       minBidIncrement: args.minBidIncrement ?? DEFAULTS.minBidIncrement,
       minBid: args.minBid ?? DEFAULTS.minBid,
-      captainMinBid: args.captainMinBid ?? DEFAULTS.captainMinBid,
       createdBy: user._id,
     });
     await ensureAuctionState(ctx, tournamentId);
@@ -164,7 +161,6 @@ export const update = mutation({
     rosterSize: v.optional(v.number()),
     minBidIncrement: v.optional(v.number()),
     minBid: v.optional(v.number()),
-    captainMinBid: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     await requireTournamentAccess(ctx, args.tournamentId);

@@ -38,7 +38,6 @@ export function TournamentOverview({ tournament }: { tournament: Tournament }) {
   const [rosterSize, setRosterSize] = useState(String(tournament.rosterSize));
   const [minBidIncrement, setMinBidIncrement] = useState(String(tournament.minBidIncrement));
   const [minBid, setMinBid] = useState(String(tournament.minBid ?? 100));
-  const [captainMinBid, setCaptainMinBid] = useState(String(tournament.captainMinBid ?? 1000));
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -55,7 +54,6 @@ export function TournamentOverview({ tournament }: { tournament: Tournament }) {
         rosterSize: Number(rosterSize),
         minBidIncrement: Number(minBidIncrement),
         minBid: Number(minBid),
-        captainMinBid: Number(captainMinBid),
       });
       toast.success('Configuration saved');
     } catch (e) {
@@ -174,19 +172,14 @@ export function TournamentOverview({ tournament }: { tournament: Tournament }) {
               <Input id="cfg-incr" type="number" value={minBidIncrement} onChange={(e) => setMinBidIncrement(e.target.value)} />
             </div>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <Label htmlFor="cfg-minbid">Min bid / player</Label>
-              <Input id="cfg-minbid" type="number" value={minBid} onChange={(e) => setMinBid(e.target.value)} />
-            </div>
-            <div>
-              <Label htmlFor="cfg-capminbid">Min bid / captain</Label>
-              <Input id="cfg-capminbid" type="number" value={captainMinBid} onChange={(e) => setCaptainMinBid(e.target.value)} />
-            </div>
+          <div>
+            <Label htmlFor="cfg-minbid">Min bid / player</Label>
+            <Input id="cfg-minbid" type="number" value={minBid} onChange={(e) => setMinBid(e.target.value)} />
           </div>
           <p className="text-xs text-muted-foreground">
-            The minimum bid is the opening price for every player (captains use their own higher floor). Budget and
-            roster size apply to teams created after the change; existing teams keep their current budget.
+            The minimum bid is the opening price for every player. Captains have their own minimum, set per captain when
+            you add them. Budget and roster size apply to teams created after the change; existing teams keep their
+            current budget.
           </p>
           <Button onClick={() => void save()} disabled={saving || !name.trim()} className="self-start">
             {saving ? 'Saving…' : 'Save changes'}
