@@ -178,12 +178,13 @@ function ActiveLot({ tournamentId, state }: { tournamentId: Id<'tournaments'>; s
             return (
               <button
                 key={t._id}
+                disabled={cannotAfford}
                 onClick={() => (useOverride ? bidOverride(t._id) : bid(t._id))}
                 className={`flex flex-col items-start rounded-xl border p-4 text-left transition ${
                   isLeading
                     ? 'border-accent bg-accent/10'
                     : cannotAfford
-                      ? 'border-danger/40 bg-danger/5 hover:border-danger'
+                      ? 'cursor-not-allowed border-danger/40 bg-danger/5 opacity-60'
                       : 'border-border bg-surface hover:border-accent/60'
                 }`}
               >

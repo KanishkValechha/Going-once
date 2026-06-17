@@ -127,6 +127,14 @@ export const placeBid = mutation({
       amount = nextBid(state.currentBid, player.basePrice, tournament.minBidIncrement);
     }
 
+    // Hard limit: a team may not bid past what it can pay while still affording
+    // the minimum for its remaining roster slots. Rejected before any write.
+    const team = await ctx.db.get('teams', args.teamId);
+    if (!team || team.tournamentId !== args.tournamentId) throw new Error('Team not found');
+    if (!canTeamAfford(team, tournament, amount)) {
+      throw new Error('Team cannot afford this bid given its remaining roster slots');
+    }
+
     const newBidCount = state.bidCount + 1;
     await ctx.db.patch('auctionState', state._id, {
       currentBid: amount,
@@ -141,11 +149,7 @@ export const placeBid = mutation({
       seq: newBidCount,
       undone: false,
     });
-
-    // Soft affordability signal (advisory; Sold enforces the hard limit).
-    const team = await ctx.db.get('teams', args.teamId);
-    const affordWarning = team ? !canTeamAfford(team, tournament, amount) : false;
-    return { ignored: false as const, currentBid: amount, bidCount: newBidCount, affordWarning };
+    return { ignored: false as const, currentBid: amount, bidCount: newBidCount };
   },
 });
 
