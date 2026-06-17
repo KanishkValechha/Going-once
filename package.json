@@ -13,7 +13,7 @@
     "url": "https://github.com/workos/template-convex-nextjs-authkit/issues"
   },
   "scripts": {
-    "dev": "convex dev --start 'next dev'",
+    "dev": "convex dev --start \"next dev\"",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
