@@ -1,12 +1,12 @@
 import { v } from 'convex/values';
 import { mutation, query } from './_generated/server';
-import { requireAdmin } from './lib/auth';
+import { requireAccessForTeam, requireTournamentAccess, requireUser } from './lib/auth';
 
-/** Admin-only: teams in a tournament, with resolved logo URLs. */
+/** Teams in a tournament, with resolved logo URLs (caller must have access). */
 export const listByTournament = query({
   args: { tournamentId: v.id('tournaments') },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx);
+    await requireTournamentAccess(ctx, args.tournamentId);
     const teams = await ctx.db
       .query('teams')
       .withIndex('by_tournament', (q) => q.eq('tournamentId', args.tournamentId))
@@ -28,7 +28,7 @@ export const create = mutation({
     budget: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx);
+    await requireTournamentAccess(ctx, args.tournamentId);
     const tournament = await ctx.db.get('tournaments', args.tournamentId);
     if (!tournament) throw new Error('Tournament not found');
     return await ctx.db.insert('teams', {
@@ -49,7 +49,7 @@ export const update = mutation({
     remainingBudget: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx);
+    await requireAccessForTeam(ctx, args.teamId);
     const { teamId, ...patch } = args;
     const fields = Object.fromEntries(Object.entries(patch).filter(([, val]) => val !== undefined));
     await ctx.db.patch('teams', teamId, fields);
@@ -60,17 +60,17 @@ export const update = mutation({
 export const remove = mutation({
   args: { teamId: v.id('teams') },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx);
+    await requireAccessForTeam(ctx, args.teamId);
     await ctx.db.delete('teams', args.teamId);
     return null;
   },
 });
 
-/** Upload URL for a team logo (admin-only). Client POSTs the file, gets a storageId. */
+/** Upload URL for a team logo (portal users only). Client POSTs the file, gets a storageId. */
 export const generateUploadUrl = mutation({
   args: {},
   handler: async (ctx) => {
-    await requireAdmin(ctx);
+    await requireUser(ctx);
     return await ctx.storage.generateUploadUrl();
   },
 });

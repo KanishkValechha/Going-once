@@ -7,11 +7,14 @@ import { v } from 'convex/values';
 export default defineSchema({
   // Identity synced from WorkOS on login. `tokenIdentifier` is the canonical,
   // stable WorkOS identity (issuer|subject) — never trust a client-supplied id.
+  // A row may be pre-created by email (an invite) before that person's first
+  // login, so `tokenIdentifier` is absent until they sign in and get linked.
   users: defineTable({
-    tokenIdentifier: v.string(),
+    tokenIdentifier: v.optional(v.string()),
     email: v.string(),
     name: v.optional(v.string()),
     role: v.union(v.literal('admin'), v.literal('member')),
+    invitedBy: v.optional(v.id('users')),
   })
     .index('by_tokenIdentifier', ['tokenIdentifier'])
     .index('by_email', ['email']),
@@ -28,6 +31,17 @@ export default defineSchema({
   })
     .index('by_status', ['status'])
     .index('by_viewerToken', ['viewerToken']),
+
+  // Per-tournament edit access. A `member` can only see/edit tournaments they
+  // have a row here for (the creator is added automatically on create).
+  // Super-admins (`users.role === 'admin'`) bypass this and access everything.
+  tournamentMembers: defineTable({
+    tournamentId: v.id('tournaments'),
+    userId: v.id('users'),
+    addedBy: v.id('users'),
+  })
+    .index('by_tournament', ['tournamentId'])
+    .index('by_user_and_tournament', ['userId', 'tournamentId']),
 
   // Teams: slow-churn. `remainingBudget`/`playersWon` only change on Sold (or undo).
   teams: defineTable({

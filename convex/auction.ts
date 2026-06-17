@@ -1,7 +1,7 @@
 import { v } from 'convex/values';
 import { mutation, query, QueryCtx, MutationCtx } from './_generated/server';
 import { Id } from './_generated/dataModel';
-import { requireAdmin } from './lib/auth';
+import { requireTournamentAccess } from './lib/auth';
 import { canTeamAfford, maxAffordableBid } from './lib/budget';
 import { nextBid } from './lib/increment';
 
@@ -37,7 +37,7 @@ async function requireState(ctx: MutationCtx, tournamentId: Id<'tournaments'>) {
 export const selectPlayer = mutation({
   args: { tournamentId: v.id('tournaments'), playerId: v.id('players') },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx);
+    await requireTournamentAccess(ctx, args.tournamentId);
     const state = await requireState(ctx, args.tournamentId);
     if (state.phase === 'bidding') throw new Error('Finish the current lot before selecting another');
     const player = await ctx.db.get('players', args.playerId);
@@ -69,7 +69,7 @@ export const placeBid = mutation({
     expectedBidCount: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx);
+    await requireTournamentAccess(ctx, args.tournamentId);
     const state = await requireState(ctx, args.tournamentId);
     if (state.phase !== 'bidding' || !state.activePlayerId) {
       throw new Error('No active lot to bid on');
@@ -121,7 +121,7 @@ export const placeBid = mutation({
 export const undoBid = mutation({
   args: { tournamentId: v.id('tournaments') },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx);
+    await requireTournamentAccess(ctx, args.tournamentId);
     const state = await requireState(ctx, args.tournamentId);
     if (state.phase !== 'bidding' || !state.activePlayerId) return null;
 
@@ -157,7 +157,7 @@ export const undoBid = mutation({
 export const markSold = mutation({
   args: { tournamentId: v.id('tournaments') },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx);
+    await requireTournamentAccess(ctx, args.tournamentId);
     const state = await requireState(ctx, args.tournamentId);
     if (state.phase !== 'bidding' || !state.activePlayerId) throw new Error('No active lot');
     if (!state.leadingTeamId || state.currentBid === undefined) {
@@ -196,7 +196,7 @@ export const markSold = mutation({
 export const markUnsold = mutation({
   args: { tournamentId: v.id('tournaments') },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx);
+    await requireTournamentAccess(ctx, args.tournamentId);
     const state = await requireState(ctx, args.tournamentId);
     if (state.phase !== 'bidding' || !state.activePlayerId) throw new Error('No active lot');
     await ctx.db.patch('players', state.activePlayerId, { status: 'unsold' });
@@ -215,7 +215,7 @@ export const markUnsold = mutation({
 export const undoSold = mutation({
   args: { tournamentId: v.id('tournaments'), playerId: v.id('players') },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx);
+    await requireTournamentAccess(ctx, args.tournamentId);
     const player = await ctx.db.get('players', args.playerId);
     if (!player || player.tournamentId !== args.tournamentId) throw new Error('Player not found');
     if (player.status !== 'sold' || !player.soldToTeamId || player.soldPrice === undefined) {
@@ -241,7 +241,7 @@ export const undoSold = mutation({
 export const consoleState = query({
   args: { tournamentId: v.id('tournaments') },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx);
+    await requireTournamentAccess(ctx, args.tournamentId);
     const tournament = await ctx.db.get('tournaments', args.tournamentId);
     if (!tournament) return null;
     const state = await getState(ctx, args.tournamentId);

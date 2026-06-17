@@ -1,7 +1,8 @@
 import { v } from 'convex/values';
 import { mutation, query, MutationCtx } from './_generated/server';
-import { Id } from './_generated/dataModel';
-import { requireAdmin } from './lib/auth';
+import { Doc, Id } from './_generated/dataModel';
+import { requireTournamentAccess, requireUser } from './lib/auth';
+import { upsertUserByEmail } from './users';
 
 function newViewerToken(): string {
   // High-entropy capability token for the /live URL.
@@ -23,20 +24,35 @@ async function ensureAuctionState(ctx: MutationCtx, tournamentId: Id<'tournament
   }
 }
 
-/** Admin-only: list tournaments the admin can manage. */
+/**
+ * List the tournaments the caller can manage: super-admins see all, members see
+ * only the ones they belong to.
+ */
 export const list = query({
   args: {},
   handler: async (ctx) => {
-    await requireAdmin(ctx);
-    return await ctx.db.query('tournaments').order('desc').take(100);
+    const user = await requireUser(ctx);
+    if (user.role === 'admin') {
+      return await ctx.db.query('tournaments').order('desc').take(100);
+    }
+    const memberships = await ctx.db
+      .query('tournamentMembers')
+      .withIndex('by_user_and_tournament', (q) => q.eq('userId', user._id))
+      .take(100);
+    const tournaments = await Promise.all(
+      memberships.map((m) => ctx.db.get('tournaments', m.tournamentId)),
+    );
+    return tournaments
+      .filter((t): t is Doc<'tournaments'> => t !== null)
+      .sort((a, b) => b._creationTime - a._creationTime);
   },
 });
 
-/** Admin-only: a single tournament by id. */
+/** A single tournament by id (caller must have access). */
 export const get = query({
   args: { tournamentId: v.id('tournaments') },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx);
+    await requireTournamentAccess(ctx, args.tournamentId);
     return await ctx.db.get('tournaments', args.tournamentId);
   },
 });
@@ -49,7 +65,7 @@ export const create = mutation({
     minBidIncrement: v.number(),
   },
   handler: async (ctx, args) => {
-    const admin = await requireAdmin(ctx);
+    const user = await requireUser(ctx);
     const tournamentId = await ctx.db.insert('tournaments', {
       name: args.name,
       status: 'draft',
@@ -57,9 +73,15 @@ export const create = mutation({
       defaultBudget: args.defaultBudget,
       rosterSize: args.rosterSize,
       minBidIncrement: args.minBidIncrement,
-      createdBy: admin._id,
+      createdBy: user._id,
     });
     await ensureAuctionState(ctx, tournamentId);
+    // The creator becomes a member so they can see/edit what they created.
+    await ctx.db.insert('tournamentMembers', {
+      tournamentId,
+      userId: user._id,
+      addedBy: user._id,
+    });
     return tournamentId;
   },
 });
@@ -73,7 +95,7 @@ export const update = mutation({
     minBidIncrement: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx);
+    await requireTournamentAccess(ctx, args.tournamentId);
     const { tournamentId, ...patch } = args;
     const fields = Object.fromEntries(Object.entries(patch).filter(([, val]) => val !== undefined));
     await ctx.db.patch('tournaments', tournamentId, fields);
@@ -85,7 +107,7 @@ export const update = mutation({
 export const setLive = mutation({
   args: { tournamentId: v.id('tournaments') },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx);
+    await requireTournamentAccess(ctx, args.tournamentId);
     const currentlyLive = await ctx.db
       .query('tournaments')
       .withIndex('by_status', (q) => q.eq('status', 'live'))
@@ -104,7 +126,7 @@ export const setLive = mutation({
 export const complete = mutation({
   args: { tournamentId: v.id('tournaments') },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx);
+    await requireTournamentAccess(ctx, args.tournamentId);
     await ctx.db.patch('tournaments', args.tournamentId, { status: 'completed' });
     return null;
   },
@@ -113,9 +135,85 @@ export const complete = mutation({
 export const regenerateViewerToken = mutation({
   args: { tournamentId: v.id('tournaments') },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx);
+    await requireTournamentAccess(ctx, args.tournamentId);
     const token = newViewerToken();
     await ctx.db.patch('tournaments', args.tournamentId, { viewerToken: token });
     return token;
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Tournament membership — who can see/edit this tournament
+// ---------------------------------------------------------------------------
+
+/** List the members of a tournament (caller must have access). */
+export const listMembers = query({
+  args: { tournamentId: v.id('tournaments') },
+  handler: async (ctx, args) => {
+    await requireTournamentAccess(ctx, args.tournamentId);
+    const memberships = await ctx.db
+      .query('tournamentMembers')
+      .withIndex('by_tournament', (q) => q.eq('tournamentId', args.tournamentId))
+      .take(200);
+    const tournament = await ctx.db.get('tournaments', args.tournamentId);
+    return await Promise.all(
+      memberships.map(async (m) => {
+        const user = await ctx.db.get('users', m.userId);
+        return {
+          membershipId: m._id,
+          userId: m.userId,
+          email: user?.email ?? '(removed)',
+          name: user?.name ?? null,
+          role: user?.role ?? 'member',
+          pending: user ? !user.tokenIdentifier : false,
+          isCreator: tournament?.createdBy === m.userId,
+        };
+      }),
+    );
+  },
+});
+
+/**
+ * Add a member to a tournament by email so they can edit it. Anyone with access
+ * to the tournament (super-admin or an existing member) may add others. If the
+ * email isn't a portal user yet it's invited as a `member` (granting login).
+ */
+export const addMember = mutation({
+  args: { tournamentId: v.id('tournaments'), email: v.string() },
+  handler: async (ctx, args) => {
+    const caller = await requireTournamentAccess(ctx, args.tournamentId);
+    const userId = await upsertUserByEmail(ctx, args.email, 'member', caller._id);
+    const existing = await ctx.db
+      .query('tournamentMembers')
+      .withIndex('by_user_and_tournament', (q) =>
+        q.eq('userId', userId).eq('tournamentId', args.tournamentId),
+      )
+      .unique();
+    if (existing) return existing._id;
+    return await ctx.db.insert('tournamentMembers', {
+      tournamentId: args.tournamentId,
+      userId,
+      addedBy: caller._id,
+    });
+  },
+});
+
+/** Remove a member from a tournament (caller must have access). */
+export const removeMember = mutation({
+  args: { tournamentId: v.id('tournaments'), userId: v.id('users') },
+  handler: async (ctx, args) => {
+    await requireTournamentAccess(ctx, args.tournamentId);
+    const tournament = await ctx.db.get('tournaments', args.tournamentId);
+    if (tournament?.createdBy === args.userId) {
+      throw new Error('The tournament creator cannot be removed');
+    }
+    const membership = await ctx.db
+      .query('tournamentMembers')
+      .withIndex('by_user_and_tournament', (q) =>
+        q.eq('userId', args.userId).eq('tournamentId', args.tournamentId),
+      )
+      .unique();
+    if (membership) await ctx.db.delete('tournamentMembers', membership._id);
+    return null;
   },
 });

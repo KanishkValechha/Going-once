@@ -10,8 +10,9 @@ import { TeamsManager } from '@/components/admin/TeamsManager';
 import { PlayersManager } from '@/components/admin/PlayersManager';
 import { CaptainsManager } from '@/components/admin/CaptainsManager';
 import { TournamentSettings } from '@/components/admin/TournamentSettings';
+import { TournamentMembers } from '@/components/admin/TournamentMembers';
 
-const TABS = ['Teams', 'Players', 'Captains', 'Settings'] as const;
+const TABS = ['Teams', 'Players', 'Captains', 'Members', 'Settings'] as const;
 type Tab = (typeof TABS)[number];
 
 export default function TournamentHub({ params }: { params: Promise<{ tournamentId: string }> }) {
@@ -55,6 +56,7 @@ export default function TournamentHub({ params }: { params: Promise<{ tournament
       {tab === 'Teams' && <TeamsManager tournamentId={id} />}
       {tab === 'Players' && <PlayersManager tournamentId={id} />}
       {tab === 'Captains' && <CaptainsManager tournamentId={id} />}
+      {tab === 'Members' && <TournamentMembers tournamentId={id} />}
       {tab === 'Settings' && <TournamentSettings tournament={tournament} />}
     </div>
   );

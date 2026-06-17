@@ -1,12 +1,12 @@
 import { v } from 'convex/values';
 import { mutation, query } from './_generated/server';
-import { requireAdmin } from './lib/auth';
+import { requireAccessForPlayer, requireTournamentAccess, requireUser } from './lib/auth';
 
-/** Admin-only: players in a tournament (ordered), with resolved image URLs. */
+/** Players in a tournament (ordered), with resolved image URLs (caller must have access). */
 export const listByTournament = query({
   args: { tournamentId: v.id('tournaments') },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx);
+    await requireTournamentAccess(ctx, args.tournamentId);
     const players = await ctx.db
       .query('players')
       .withIndex('by_tournament_and_sortOrder', (q) => q.eq('tournamentId', args.tournamentId))
@@ -30,7 +30,7 @@ export const create = mutation({
     isCaptain: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx);
+    await requireTournamentAccess(ctx, args.tournamentId);
     // Place new players at the end of the queue.
     const last = await ctx.db
       .query('players')
@@ -61,7 +61,7 @@ export const update = mutation({
     isCaptain: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx);
+    await requireAccessForPlayer(ctx, args.playerId);
     const { playerId, ...patch } = args;
     const fields = Object.fromEntries(Object.entries(patch).filter(([, val]) => val !== undefined));
     await ctx.db.patch('players', playerId, fields);
@@ -72,7 +72,7 @@ export const update = mutation({
 export const remove = mutation({
   args: { playerId: v.id('players') },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx);
+    await requireAccessForPlayer(ctx, args.playerId);
     await ctx.db.delete('players', args.playerId);
     return null;
   },
@@ -90,7 +90,7 @@ export const directAssign = mutation({
     price: v.number(),
   },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx);
+    await requireAccessForPlayer(ctx, args.playerId);
     const player = await ctx.db.get('players', args.playerId);
     const team = await ctx.db.get('teams', args.teamId);
     if (!player) throw new Error('Player not found');
@@ -114,7 +114,7 @@ export const directAssign = mutation({
 export const generateUploadUrl = mutation({
   args: {},
   handler: async (ctx) => {
-    await requireAdmin(ctx);
+    await requireUser(ctx);
     return await ctx.storage.generateUploadUrl();
   },
 });
