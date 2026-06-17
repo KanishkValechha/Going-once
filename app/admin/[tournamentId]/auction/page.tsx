@@ -204,15 +204,27 @@ function ActiveLot({ tournamentId, state }: { tournamentId: Id<'tournaments'>; s
 function SelectPlayer({ tournamentId }: { tournamentId: Id<'tournaments'> }) {
   const players = useQuery(api.players.listByTournament, { tournamentId });
   const selectPlayer = useMutation(api.auction.selectPlayer);
+  const selectRandomPlayer = useMutation(api.auction.selectRandomPlayer);
 
   if (players === undefined) return <Spinner />;
   const available = players.filter((p) => p.status === 'available');
   const unsold = players.filter((p) => p.status === 'unsold');
 
+  async function revealRandom() {
+    try {
+      await selectRandomPlayer({ tournamentId });
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Could not pick a player');
+    }
+  }
+
   return (
     <div className="flex flex-col gap-6">
-      <Card>
-        <p className="text-muted">No active lot. Select a player to start bidding.</p>
+      <Card className="flex flex-col items-center gap-3 text-center">
+        <p className="text-muted">No active lot. Reveal the next player at random, or pick one manually below.</p>
+        <Button onClick={() => void revealRandom()} disabled={available.length === 0}>
+          🎲 Reveal random player
+        </Button>
       </Card>
 
       <Section

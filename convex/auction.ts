@@ -56,6 +56,38 @@ export const selectPlayer = mutation({
 });
 
 /**
+ * Put a randomly chosen available player into active bidding — the auctioneer
+ * reveals players one by one without picking the order. Rejected if a lot is
+ * already live or no available players remain.
+ */
+export const selectRandomPlayer = mutation({
+  args: { tournamentId: v.id('tournaments') },
+  handler: async (ctx, args) => {
+    await requireTournamentAccess(ctx, args.tournamentId);
+    const state = await requireState(ctx, args.tournamentId);
+    if (state.phase === 'bidding') throw new Error('Finish the current lot before selecting another');
+
+    const available = await ctx.db
+      .query('players')
+      .withIndex('by_tournament_and_status', (q) =>
+        q.eq('tournamentId', args.tournamentId).eq('status', 'available'),
+      )
+      .take(1000);
+    if (available.length === 0) throw new Error('No available players left to auction');
+
+    const pick = available[Math.floor(Math.random() * available.length)];
+    await ctx.db.patch('auctionState', state._id, {
+      activePlayerId: pick._id,
+      currentBid: undefined,
+      leadingTeamId: undefined,
+      bidCount: 0,
+      phase: 'bidding',
+    });
+    return null;
+  },
+});
+
+/**
  * Register a bid for a team. The amount is computed server-side (never trusted
  * from the client). `expectedBidCount` guards against double-fired clicks: if it
  * doesn't match the current count, the call is a no-op. Only `auctionState` and
