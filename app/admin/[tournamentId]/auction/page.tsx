@@ -48,6 +48,46 @@ export default function AuctionConsolePage({ params }: { params: Promise<{ tourn
       ) : (
         <SelectPlayer tournamentId={id} />
       )}
+
+      <TeamRosters teams={state.teams} rosterSize={state.tournament.rosterSize} />
+    </div>
+  );
+}
+
+function TeamRosters({
+  teams,
+  rosterSize,
+}: {
+  teams: ConsoleState['teams'];
+  rosterSize: number;
+}) {
+  return (
+    <div className="flex flex-col gap-3">
+      <h3 className="text-sm font-semibold uppercase tracking-wide text-muted">Team rosters</h3>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {teams.map((t) => (
+          <Card key={t._id} className="flex flex-col gap-2">
+            <div className="flex items-baseline justify-between">
+              <span className="font-semibold">{t.name}</span>
+              <span className="tnum text-xs text-muted">
+                {t.playersWon}/{rosterSize}
+              </span>
+            </div>
+            {t.roster.length === 0 ? (
+              <p className="text-xs text-muted">No players yet.</p>
+            ) : (
+              <ul className="flex flex-col gap-1 text-sm">
+                {t.roster.map((p) => (
+                  <li key={p._id} className="flex justify-between gap-2">
+                    <span className="truncate">{p.name}</span>
+                    <span className="tnum text-muted">{formatAmount(p.soldPrice)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+        ))}
+      </div>
     </div>
   );
 }

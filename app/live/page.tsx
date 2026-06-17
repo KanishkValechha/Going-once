@@ -110,6 +110,11 @@ function TeamBoard({ board, compact = false }: { board: Board; compact?: boolean
             <p className="text-xs text-muted">
               {t.playersWon} / {board.rosterSize} · {remainingSlots(board.rosterSize, t.playersWon)} slots left
             </p>
+            {!compact && t.roster.length > 0 && (
+              <p className="mt-1 truncate text-xs text-muted">
+                {t.roster.map((p) => p.name).join(', ')}
+              </p>
+            )}
           </div>
           <p className="tnum text-right text-lg font-bold text-accent">{formatAmount(t.remainingBudget)}</p>
         </div>

@@ -287,6 +287,21 @@ export const consoleState = query({
       .withIndex('by_tournament', (q) => q.eq('tournamentId', args.tournamentId))
       .take(100);
 
+    // Roster contents: the players each team has already won.
+    const soldPlayers = await ctx.db
+      .query('players')
+      .withIndex('by_tournament_and_status', (q) =>
+        q.eq('tournamentId', args.tournamentId).eq('status', 'sold'),
+      )
+      .take(1000);
+    const rosterByTeam = new Map<string, { _id: Id<'players'>; name: string; soldPrice: number }[]>();
+    for (const p of soldPlayers) {
+      if (!p.soldToTeamId) continue;
+      const list = rosterByTeam.get(p.soldToTeamId) ?? [];
+      list.push({ _id: p._id, name: p.name, soldPrice: p.soldPrice ?? 0 });
+      rosterByTeam.set(p.soldToTeamId, list);
+    }
+
     let activePlayer = null;
     if (state?.activePlayerId) {
       const p = await ctx.db.get('players', state.activePlayerId);
@@ -308,6 +323,7 @@ export const consoleState = query({
       teams: teams.map((t) => ({
         ...t,
         maxBid: maxAffordableBid(t, tournament),
+        roster: rosterByTeam.get(t._id) ?? [],
       })),
     };
   },
@@ -366,6 +382,19 @@ export const liveBoard = query({
       .query('teams')
       .withIndex('by_tournament', (q) => q.eq('tournamentId', tournament._id))
       .take(100);
+    const soldPlayers = await ctx.db
+      .query('players')
+      .withIndex('by_tournament_and_status', (q) =>
+        q.eq('tournamentId', tournament._id).eq('status', 'sold'),
+      )
+      .take(1000);
+    const rosterByTeam = new Map<string, { name: string; soldPrice: number }[]>();
+    for (const p of soldPlayers) {
+      if (!p.soldToTeamId) continue;
+      const list = rosterByTeam.get(p.soldToTeamId) ?? [];
+      list.push({ name: p.name, soldPrice: p.soldPrice ?? 0 });
+      rosterByTeam.set(p.soldToTeamId, list);
+    }
     return {
       valid: true as const,
       tournamentName: tournament.name,
@@ -377,6 +406,7 @@ export const liveBoard = query({
           remainingBudget: t.remainingBudget,
           playersWon: t.playersWon,
           logoUrl: t.logoStorageId ? await ctx.storage.getUrl(t.logoStorageId) : null,
+          roster: rosterByTeam.get(t._id) ?? [],
         })),
       ),
     };
