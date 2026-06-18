@@ -164,8 +164,39 @@ export const update = mutation({
   },
   handler: async (ctx, args) => {
     await requireTournamentAccess(ctx, args.tournamentId);
+    const tournament = await ctx.db.get('tournaments', args.tournamentId);
+    if (!tournament) throw new Error('Tournament not found');
+
     const { tournamentId, ...patch } = args;
     const fields = Object.fromEntries(Object.entries(patch).filter(([, val]) => val !== undefined));
+
+    // Changing the per-team budget shifts every existing team's current balance
+    // by the same delta (raise it and everyone gains headroom; lower it and
+    // everyone loses some). A decrease that would push any team's balance below
+    // zero is rejected — we never silently drive a team negative.
+    if (args.defaultBudget !== undefined && args.defaultBudget !== tournament.defaultBudget) {
+      const delta = args.defaultBudget - tournament.defaultBudget;
+      const teams = await ctx.db
+        .query('teams')
+        .withIndex('by_tournament', (q) => q.eq('tournamentId', tournamentId))
+        .take(100);
+      if (delta < 0) {
+        const tightest = teams.reduce<Doc<'teams'> | null>(
+          (min, t) => (min === null || t.remainingBudget < min.remainingBudget ? t : min),
+          null,
+        );
+        if (tightest && tightest.remainingBudget + delta < 0) {
+          throw new Error(
+            `Can't lower the budget by ${-delta}: ${tightest.name} only has ${tightest.remainingBudget} left. ` +
+              `Reduce by at most ${tightest.remainingBudget}.`,
+          );
+        }
+      }
+      for (const t of teams) {
+        await ctx.db.patch('teams', t._id, { remainingBudget: t.remainingBudget + delta });
+      }
+    }
+
     await ctx.db.patch('tournaments', tournamentId, fields);
     return null;
   },

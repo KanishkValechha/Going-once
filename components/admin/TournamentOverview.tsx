@@ -178,8 +178,8 @@ export function TournamentOverview({ tournament }: { tournament: Tournament }) {
           </div>
           <p className="text-xs text-muted-foreground">
             The minimum bid is the opening price for every player. Captains have their own minimum, set per captain when
-            you add them. Budget and roster size apply to teams created after the change; existing teams keep their
-            current budget.
+            you add them. Changing the budget shifts every existing team&apos;s current balance by the same amount — a
+            decrease that would push any team below zero is rejected. Roster size applies to teams created after the change.
           </p>
           <Button onClick={() => void save()} disabled={saving || !name.trim()} className="self-start">
             {saving ? 'Saving…' : 'Save changes'}
