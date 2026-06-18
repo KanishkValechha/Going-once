@@ -31,7 +31,11 @@ import {
 import { downloadNodeAsPng } from '@/helpers/exportImage';
 import { cn } from '@/lib/utils';
 
-type BracketFormat = 'single_elimination' | 'round_robin' | 'groups_knockout';
+type BracketFormat =
+  | 'single_elimination'
+  | 'round_robin'
+  | 'double_round_robin'
+  | 'groups_knockout';
 
 type BracketMatch = {
   _id: Id<'matches'>;
@@ -70,6 +74,7 @@ type StandingRow = {
 const FORMAT_LABEL: Record<BracketFormat, string> = {
   single_elimination: 'Single elimination',
   round_robin: 'Round robin (league)',
+  double_round_robin: 'Double round robin',
   groups_knockout: 'Groups + knockout',
 };
 
@@ -131,6 +136,9 @@ function BracketGenerator({ tournamentId }: { tournamentId: Id<'tournaments'> })
             <SelectContent>
               <SelectItem value="single_elimination">Single elimination (knockout)</SelectItem>
               <SelectItem value="round_robin">Round robin (everyone plays everyone)</SelectItem>
+              <SelectItem value="double_round_robin">
+                Double round robin (everyone plays twice)
+              </SelectItem>
               <SelectItem value="groups_knockout">Groups + knockout</SelectItem>
             </SelectContent>
           </Select>
@@ -173,6 +181,7 @@ function BracketGenerator({ tournamentId }: { tournamentId: Id<'tournaments'> })
 const FORMAT_HINT: Record<BracketFormat, string> = {
   single_elimination: 'A knockout bracket — lose once and you’re out. Byes are added automatically when the team count isn’t a power of two.',
   round_robin: 'Every team plays every other team once. The champion is the top of the table.',
+  double_round_robin: 'Every team plays every other team twice (home and away). The champion is the top of the table.',
   groups_knockout: 'Teams are split into random groups that play a mini league; the top finishers advance to a knockout bracket.',
 };
 
@@ -272,7 +281,9 @@ function BracketBoard({
       </div>
 
       <div ref={captureRef} className="rounded-xl bg-surface p-5">
-        {format === 'round_robin' && <RoundRobinView data={data} />}
+        {(format === 'round_robin' || format === 'double_round_robin') && (
+          <RoundRobinView data={data} />
+        )}
         {format === 'single_elimination' && <KnockoutView matches={knockout} />}
         {format === 'groups_knockout' && (
           <div className="flex flex-col gap-8">
@@ -297,7 +308,7 @@ function BracketBoard({
 
 /** Champion = winner of the single match that has no `nextMatchId` (the final). */
 function findChampion(data: ViewData): string | null {
-  if (data.bracket.format === 'round_robin') {
+  if (data.bracket.format === 'round_robin' || data.bracket.format === 'double_round_robin') {
     const table = data.standings[0]?.rows;
     if (table && table.length > 0 && table[0].played > 0) return table[0].name;
     return null;

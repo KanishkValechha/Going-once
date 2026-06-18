@@ -138,7 +138,9 @@ async function seedKnockout(
 
 /**
  * Round-robin fixtures via the circle method. If the team count is odd a virtual
- * bye rotates through, giving each team one rest round.
+ * bye rotates through, giving each team one rest round. With `legs = 2` it builds
+ * a double round robin: every pairing is played twice, the second leg reversing
+ * home/away. Rounds are numbered continuously across both legs.
  */
 async function buildRoundRobin(
   ctx: MutationCtx,
@@ -147,36 +149,43 @@ async function buildRoundRobin(
   teams: Id<'teams'>[],
   groupIndex: number,
   groupLabel: string,
+  legs: number = 1,
 ) {
   const ids: (Id<'teams'> | null)[] = [...teams];
   if (ids.length % 2 === 1) ids.push(null); // bye marker
   const n = ids.length;
-  const rounds = n - 1;
+  const roundsPerLeg = n - 1;
   const half = n / 2;
-  // Fixed first element, rotate the rest.
-  let order = [...ids];
-  for (let r = 0; r < rounds; r++) {
-    let slot = 0;
-    for (let i = 0; i < half; i++) {
-      const a = order[i];
-      const b = order[n - 1 - i];
-      if (a && b) {
-        await ctx.db.insert('matches', {
-          tournamentId,
-          bracketId,
-          stage: 'group',
-          groupIndex,
-          round: r,
-          slot: slot++,
-          label: groupLabel ? `${groupLabel} · Round ${r + 1}` : `Round ${r + 1}`,
-          teamAId: a,
-          teamBId: b,
-          status: 'ready',
-        });
+  let round = 0;
+  for (let leg = 0; leg < legs; leg++) {
+    // Restart the rotation each leg so the same pairings recur; the second leg
+    // swaps which side is "home".
+    let order = [...ids];
+    for (let r = 0; r < roundsPerLeg; r++) {
+      let slot = 0;
+      for (let i = 0; i < half; i++) {
+        let a = order[i];
+        let b = order[n - 1 - i];
+        if (leg % 2 === 1) [a, b] = [b, a];
+        if (a && b) {
+          await ctx.db.insert('matches', {
+            tournamentId,
+            bracketId,
+            stage: 'group',
+            groupIndex,
+            round,
+            slot: slot++,
+            label: groupLabel ? `${groupLabel} · Round ${round + 1}` : `Round ${round + 1}`,
+            teamAId: a,
+            teamBId: b,
+            status: 'ready',
+          });
+        }
       }
+      round++;
+      // Rotate: keep index 0 fixed, move the last into position 1.
+      order = [order[0], order[n - 1], ...order.slice(1, n - 1)];
     }
-    // Rotate: keep index 0 fixed, move the last into position 1.
-    order = [order[0], order[n - 1], ...order.slice(1, n - 1)];
   }
 }
 
@@ -318,6 +327,7 @@ export const generate = mutation({
     format: v.union(
       v.literal('single_elimination'),
       v.literal('round_robin'),
+      v.literal('double_round_robin'),
       v.literal('groups_knockout'),
     ),
     groupCount: v.optional(v.number()),
@@ -346,13 +356,14 @@ export const generate = mutation({
       return bracketId;
     }
 
-    if (args.format === 'round_robin') {
+    if (args.format === 'round_robin' || args.format === 'double_round_robin') {
       const bracketId = await ctx.db.insert('brackets', {
         tournamentId: args.tournamentId,
-        format: 'round_robin',
+        format: args.format,
         seed,
       });
-      await buildRoundRobin(ctx, args.tournamentId, bracketId, seed, 0, '');
+      const legs = args.format === 'double_round_robin' ? 2 : 1;
+      await buildRoundRobin(ctx, args.tournamentId, bracketId, seed, 0, '', legs);
       return bracketId;
     }
 

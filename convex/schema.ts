@@ -114,6 +114,7 @@ export default defineSchema({
     format: v.union(
       v.literal('single_elimination'),
       v.literal('round_robin'),
+      v.literal('double_round_robin'),
       v.literal('groups_knockout'),
     ),
     seed: v.array(v.id('teams')),
