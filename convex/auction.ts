@@ -4,17 +4,7 @@ import { Id } from './_generated/dataModel';
 import { requireTournamentAccess } from './lib/auth';
 import { budgetStatus, canTeamAfford, maxAffordableBid, playerMinBid } from './lib/budget';
 import { nextBid } from './lib/increment';
-
-/** Resolve a `live` tournament from a viewer token, or null if invalid/inactive. */
-async function resolveViewer(ctx: QueryCtx, token: string) {
-  if (!token) return null;
-  const tournament = await ctx.db
-    .query('tournaments')
-    .withIndex('by_viewerToken', (q) => q.eq('viewerToken', token))
-    .unique();
-  if (!tournament || tournament.status !== 'live') return null;
-  return tournament;
-}
+import { resolveViewer } from './lib/viewer';
 
 async function getState(ctx: QueryCtx | MutationCtx, tournamentId: Id<'tournaments'>) {
   return await ctx.db

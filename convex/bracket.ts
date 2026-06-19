@@ -1,5 +1,5 @@
 import { v } from 'convex/values';
-import { mutation, query, MutationCtx } from './_generated/server';
+import { mutation, query, MutationCtx, QueryCtx } from './_generated/server';
 import { Doc, Id } from './_generated/dataModel';
 import { requireTournamentAccess } from './lib/auth';
 
@@ -239,7 +239,7 @@ export type Standing = {
 };
 
 /** League table for a set of group matches (3 for a win, 1 for a draw). */
-function computeStandings(teamIds: Id<'teams'>[], matches: Doc<'matches'>[]): Standing[] {
+export function computeStandings(teamIds: Id<'teams'>[], matches: Doc<'matches'>[]): Standing[] {
   const table = new Map<Id<'teams'>, Standing>();
   for (const id of teamIds) {
     table.set(id, {
@@ -520,73 +520,88 @@ export const reset = mutation({
 // ---------------------------------------------------------------------------
 
 /**
- * The full bracket for rendering: meta, matches enriched with team names/logos,
- * and computed group standings. Returns null when no bracket exists yet.
+ * Build the full bracket payload for rendering: meta, matches enriched with team
+ * names/logos, and computed group standings. Returns null when no bracket exists
+ * yet. Shared by the admin `view` query and the public `live.bracket` query so
+ * both render identically — only the access check differs at the call site.
+ */
+export async function buildBracketView(ctx: QueryCtx, tournamentId: Id<'tournaments'>) {
+  const bracket = await ctx.db
+    .query('brackets')
+    .withIndex('by_tournament', (q) => q.eq('tournamentId', tournamentId))
+    .unique();
+  if (!bracket) return null;
+
+  const teams = await ctx.db
+    .query('teams')
+    .withIndex('by_tournament', (q) => q.eq('tournamentId', tournamentId))
+    .take(100);
+  const teamById = new Map(teams.map((t) => [t._id, t]));
+  const nameOf = (id: Id<'teams'> | undefined) => (id ? (teamById.get(id)?.name ?? null) : null);
+  const logoOf = async (id: Id<'teams'> | undefined) => {
+    const logoStorageId = id ? teamById.get(id)?.logoStorageId : undefined;
+    return logoStorageId ? await ctx.storage.getUrl(logoStorageId) : null;
+  };
+
+  const matches = await ctx.db
+    .query('matches')
+    .withIndex('by_bracket', (q) => q.eq('bracketId', bracket._id))
+    .take(2000);
+
+  const enriched = (
+    await Promise.all(
+      matches.map(async (m) => ({
+        ...m,
+        teamAName: nameOf(m.teamAId),
+        teamBName: nameOf(m.teamBId),
+        winnerName: nameOf(m.winnerTeamId),
+        teamALogo: await logoOf(m.teamAId),
+        teamBLogo: await logoOf(m.teamBId),
+      })),
+    )
+  ).sort((a, b) => a.round - b.round || a.slot - b.slot);
+
+  // Group standings (round robin = one group at index 0).
+  const groupIndexes = [
+    ...new Set(matches.filter((m) => m.stage === 'group').map((m) => m.groupIndex ?? 0)),
+  ].sort((a, b) => a - b);
+  const standings = groupIndexes.map((gi) => {
+    const gm = matches.filter((m) => m.stage === 'group' && (m.groupIndex ?? 0) === gi);
+    const teamIds = [
+      ...new Set(gm.flatMap((m) => [m.teamAId, m.teamBId].filter(Boolean) as Id<'teams'>[])),
+    ];
+    const rows = computeStandings(teamIds, gm).map((s) => ({
+      ...s,
+      name: nameOf(s.teamId) ?? '—',
+    }));
+    return {
+      groupIndex: gi,
+      label: `Group ${String.fromCharCode(65 + gi)}`,
+      rows,
+    };
+  });
+
+  return {
+    bracket: {
+      _id: bracket._id,
+      format: bracket.format,
+      groupCount: bracket.groupCount ?? null,
+      advancePerGroup: bracket.advancePerGroup ?? null,
+      knockoutSeeded: bracket.knockoutSeeded ?? false,
+    },
+    matches: enriched,
+    standings,
+    teamCount: teams.length,
+  };
+}
+
+/**
+ * The full bracket for rendering (admin). Returns null when no bracket exists yet.
  */
 export const view = query({
   args: { tournamentId: v.id('tournaments') },
   handler: async (ctx, args) => {
     await requireTournamentAccess(ctx, args.tournamentId);
-    const bracket = await ctx.db
-      .query('brackets')
-      .withIndex('by_tournament', (q) => q.eq('tournamentId', args.tournamentId))
-      .unique();
-    if (!bracket) return null;
-
-    const teams = await ctx.db
-      .query('teams')
-      .withIndex('by_tournament', (q) => q.eq('tournamentId', args.tournamentId))
-      .take(100);
-    const teamById = new Map(teams.map((t) => [t._id, t]));
-    const nameOf = (id: Id<'teams'> | undefined) => (id ? (teamById.get(id)?.name ?? null) : null);
-
-    const matches = await ctx.db
-      .query('matches')
-      .withIndex('by_bracket', (q) => q.eq('bracketId', bracket._id))
-      .take(2000);
-
-    const enriched = matches
-      .map((m) => ({
-        ...m,
-        teamAName: nameOf(m.teamAId),
-        teamBName: nameOf(m.teamBId),
-        winnerName: nameOf(m.winnerTeamId),
-      }))
-      .sort((a, b) => a.round - b.round || a.slot - b.slot);
-
-    // Group standings (round robin = one group at index 0).
-    const groupIndexes = [
-      ...new Set(
-        matches.filter((m) => m.stage === 'group').map((m) => m.groupIndex ?? 0),
-      ),
-    ].sort((a, b) => a - b);
-    const standings = groupIndexes.map((gi) => {
-      const gm = matches.filter((m) => m.stage === 'group' && (m.groupIndex ?? 0) === gi);
-      const teamIds = [
-        ...new Set(gm.flatMap((m) => [m.teamAId, m.teamBId].filter(Boolean) as Id<'teams'>[])),
-      ];
-      const rows = computeStandings(teamIds, gm).map((s) => ({
-        ...s,
-        name: nameOf(s.teamId) ?? '—',
-      }));
-      return {
-        groupIndex: gi,
-        label: `Group ${String.fromCharCode(65 + gi)}`,
-        rows,
-      };
-    });
-
-    return {
-      bracket: {
-        _id: bracket._id,
-        format: bracket.format,
-        groupCount: bracket.groupCount ?? null,
-        advancePerGroup: bracket.advancePerGroup ?? null,
-        knockoutSeeded: bracket.knockoutSeeded ?? false,
-      },
-      matches: enriched,
-      standings,
-      teamCount: teams.length,
-    };
+    return await buildBracketView(ctx, args.tournamentId);
   },
 });
