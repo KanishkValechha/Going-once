@@ -14,6 +14,8 @@ import type * as exports from "../exports.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_budget from "../lib/budget.js";
 import type * as lib_increment from "../lib/increment.js";
+import type * as lib_viewer from "../lib/viewer.js";
+import type * as live from "../live.js";
 import type * as players from "../players.js";
 import type * as teams from "../teams.js";
 import type * as tournaments from "../tournaments.js";
@@ -32,6 +34,8 @@ declare const fullApi: ApiFromModules<{
   "lib/auth": typeof lib_auth;
   "lib/budget": typeof lib_budget;
   "lib/increment": typeof lib_increment;
+  "lib/viewer": typeof lib_viewer;
+  live: typeof live;
   players: typeof players;
   teams: typeof teams;
   tournaments: typeof tournaments;
