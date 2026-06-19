@@ -113,6 +113,72 @@ export const get = query({
   },
 });
 
+/** Roll up the headline counts for one tournament (teams, players, sold, spend, matches). */
+async function tournamentProgress(ctx: QueryCtx, tournamentId: Id<'tournaments'>) {
+  const teams = await ctx.db
+    .query('teams')
+    .withIndex('by_tournament', (q) => q.eq('tournamentId', tournamentId))
+    .take(200);
+  const players = await ctx.db
+    .query('players')
+    .withIndex('by_tournament_and_sortOrder', (q) => q.eq('tournamentId', tournamentId))
+    .take(2000);
+  const matches = await ctx.db
+    .query('matches')
+    .withIndex('by_tournament', (q) => q.eq('tournamentId', tournamentId))
+    .take(2000);
+
+  const sold = players.filter((p) => p.status === 'sold');
+  const playable = matches.filter((m) => m.teamAId && m.teamBId);
+  return {
+    teamCount: teams.length,
+    playerCount: players.length,
+    soldCount: sold.length,
+    poolCount: players.filter((p) => p.status === 'available').length,
+    unsoldCount: players.filter((p) => p.status === 'unsold').length,
+    spent: sold.reduce((s, p) => s + (p.soldPrice ?? 0), 0),
+    matchCount: matches.length,
+    playableCount: playable.length,
+    finalsCount: playable.filter((m) => m.status === 'done').length,
+  };
+}
+
+/** The set of tournaments the caller manages, each with headline counts for the dashboard. */
+export const dashboard = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await requireUser(ctx);
+    let tournaments: Doc<'tournaments'>[];
+    if (user.role === 'admin') {
+      tournaments = await ctx.db.query('tournaments').order('desc').take(100);
+    } else {
+      const memberships = await ctx.db
+        .query('tournamentMembers')
+        .withIndex('by_user_and_tournament', (q) => q.eq('userId', user._id))
+        .take(100);
+      const loaded = await Promise.all(memberships.map((m) => ctx.db.get('tournaments', m.tournamentId)));
+      tournaments = loaded
+        .filter((t): t is Doc<'tournaments'> => t !== null)
+        .sort((a, b) => b._creationTime - a._creationTime);
+    }
+    return await Promise.all(
+      tournaments.map(async (t) => ({
+        ...t,
+        ...(await tournamentProgress(ctx, t._id)),
+      })),
+    );
+  },
+});
+
+/** Headline counts for a single tournament workspace (caller must have access). */
+export const progress = query({
+  args: { tournamentId: v.id('tournaments') },
+  handler: async (ctx, args) => {
+    await requireTournamentAccess(ctx, args.tournamentId);
+    return await tournamentProgress(ctx, args.tournamentId);
+  },
+});
+
 // Sensible starting points so a new tournament can be created from just a name,
 // then fine-tuned in its setup screen.
 const DEFAULTS = {
@@ -122,9 +188,17 @@ const DEFAULTS = {
   minBid: 100,
 } as const;
 
+const formatValidator = v.union(
+  v.literal('single_elimination'),
+  v.literal('round_robin'),
+  v.literal('double_round_robin'),
+  v.literal('groups_knockout'),
+);
+
 export const create = mutation({
   args: {
     name: v.string(),
+    format: v.optional(formatValidator),
     defaultBudget: v.optional(v.number()),
     rosterSize: v.optional(v.number()),
     minBidIncrement: v.optional(v.number()),
@@ -135,6 +209,7 @@ export const create = mutation({
     const tournamentId = await ctx.db.insert('tournaments', {
       name: args.name,
       status: 'draft',
+      format: args.format ?? 'round_robin',
       viewerToken: newViewerToken(),
       defaultBudget: args.defaultBudget ?? DEFAULTS.defaultBudget,
       rosterSize: args.rosterSize ?? DEFAULTS.rosterSize,
@@ -157,6 +232,7 @@ export const update = mutation({
   args: {
     tournamentId: v.id('tournaments'),
     name: v.optional(v.string()),
+    format: v.optional(formatValidator),
     defaultBudget: v.optional(v.number()),
     rosterSize: v.optional(v.number()),
     minBidIncrement: v.optional(v.number()),

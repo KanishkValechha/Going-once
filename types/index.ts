@@ -7,6 +7,13 @@ export type User = Doc<'users'>;
 
 export type UserRole = 'admin' | 'member';
 export type TournamentStatus = 'draft' | 'live' | 'completed';
+export type TournamentFormat =
+  | 'single_elimination'
+  | 'round_robin'
+  | 'double_round_robin'
+  | 'groups_knockout';
+/** Derived lifecycle stage shown across the portal (richer than raw status). */
+export type TournamentPhase = 'setup' | 'auction' | 'live' | 'completed';
 export type PlayerStatus = 'available' | 'sold' | 'unsold';
 export type AuctionPhase = 'idle' | 'bidding';
 

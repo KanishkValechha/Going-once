@@ -1,6 +1,6 @@
 'use client';
 
-import { use } from 'react';
+import { use, useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from 'convex/react';
 import {
@@ -30,18 +30,24 @@ import { TournamentOverview } from '@/components/admin/TournamentOverview';
 import { BracketManager } from '@/components/admin/BracketManager';
 import { StandingsBoard } from '@/components/admin/StandingsBoard';
 import { AuctionExport } from '@/components/admin/AuctionExport';
+import { NextStepBanner, RunOrderBoard, type WorkspaceTab } from '@/components/admin/RunOrder';
 import { buildLiveUrl } from '@/helpers/live';
+import { FORMAT_LABEL, PHASE_LABEL, PHASE_VARIANT, derivePhase } from '@/helpers/tournament';
 
 export default function TournamentHub({ params }: { params: Promise<{ tournamentId: string }> }) {
   const { tournamentId } = use(params);
   const id = tournamentId as Id<'tournaments'>;
   const tournament = useQuery(api.tournaments.get, { tournamentId: id });
+  const progress = useQuery(api.tournaments.progress, { tournamentId: id });
+  const [tab, setTab] = useState<WorkspaceTab>('overview');
 
   if (tournament === undefined) return <Spinner label="Loading tournament…" />;
   if (tournament === null) return <p className="text-muted-foreground">Tournament not found.</p>;
 
+  const phase = progress ? derivePhase(progress) : null;
+
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-6">
       <div>
         <Link
           href="/admin"
@@ -50,22 +56,17 @@ export default function TournamentHub({ params }: { params: Promise<{ tournament
           <ArrowLeft className="size-3.5" /> All tournaments
         </Link>
         <div className="mt-3 flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <h1 className="display text-4xl">{tournament.name}</h1>
-            <Badge
-              variant={
-                tournament.status === 'live'
-                  ? 'live'
-                  : tournament.status === 'completed'
-                    ? 'positive'
-                    : 'neutral'
-              }
-            >
-              {tournament.status === 'live' && (
-                <span className="size-1.5 animate-live-pulse rounded-full bg-live" />
-              )}
-              {tournament.status}
-            </Badge>
+            {phase && (
+              <Badge variant={PHASE_VARIANT[phase]}>
+                {phase === 'live' && <span className="size-1.5 animate-live-pulse rounded-full bg-live" />}
+                {PHASE_LABEL[phase]}
+              </Badge>
+            )}
+            <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+              {FORMAT_LABEL[tournament.format ?? 'round_robin']}
+            </span>
           </div>
           <Link href={`/admin/${tournamentId}/auction`}>
             <Button size="lg" variant={tournament.status === 'live' ? 'default' : 'secondary'}>
@@ -75,7 +76,9 @@ export default function TournamentHub({ params }: { params: Promise<{ tournament
         </div>
       </div>
 
-      <Tabs defaultValue="overview">
+      {progress && <NextStepBanner progress={progress} onNavigate={setTab} />}
+
+      <Tabs value={tab} onValueChange={(v) => setTab(v as WorkspaceTab)}>
         <TabsList className="flex-wrap">
           <TabsTrigger value="overview">
             <LayoutDashboard className="size-4" /> Overview
@@ -104,7 +107,13 @@ export default function TournamentHub({ params }: { params: Promise<{ tournament
         </TabsList>
 
         <TabsContent value="overview">
-          <TournamentOverview tournament={tournament} />
+          <div className="flex flex-col gap-8">
+            {progress ? <RunOrderBoard progress={progress} onNavigate={setTab} /> : <Spinner />}
+            <div>
+              <h2 className="display mb-4 text-2xl">Setup &amp; sharing</h2>
+              <TournamentOverview tournament={tournament} />
+            </div>
+          </div>
         </TabsContent>
         <TabsContent value="teams">
           <TeamsManager tournamentId={id} />
@@ -138,13 +147,7 @@ export default function TournamentHub({ params }: { params: Promise<{ tournament
   );
 }
 
-function AuctionTab({
-  tournament,
-  tournamentId,
-}: {
-  tournament: Tournament;
-  tournamentId: string;
-}) {
+function AuctionTab({ tournament, tournamentId }: { tournament: Tournament; tournamentId: string }) {
   const isLive = tournament.status === 'live';
   return (
     <Card className="flex flex-col gap-5 p-6">

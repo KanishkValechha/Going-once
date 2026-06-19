@@ -92,10 +92,18 @@ export function BracketManager({ tournamentId }: { tournamentId: Id<'tournaments
 
 function BracketGenerator({ tournamentId }: { tournamentId: Id<'tournaments'> }) {
   const generate = useMutation(api.bracket.generate);
+  const tournament = useQuery(api.tournaments.get, { tournamentId });
   const [format, setFormat] = useState<BracketFormat>('single_elimination');
   const [groupCount, setGroupCount] = useState('2');
   const [advancePerGroup, setAdvancePerGroup] = useState('2');
   const [busy, setBusy] = useState(false);
+
+  // Default to the format chosen when the tournament was created (once loaded).
+  const [syncedFormat, setSyncedFormat] = useState(false);
+  if (!syncedFormat && tournament?.format) {
+    setSyncedFormat(true);
+    setFormat(tournament.format);
+  }
 
   async function run() {
     setBusy(true);
