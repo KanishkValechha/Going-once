@@ -16,6 +16,11 @@ export type StandingRow = {
 
 export type StandingGroup = { groupIndex: number; label: string; rows: StandingRow[] };
 
+// Shared grid template so the header and every row line their columns up:
+// position · team (flex) · played · won · drawn · lost · net · points.
+const COLS =
+  'grid grid-cols-[1.75rem_minmax(0,1fr)_2rem_2rem_2rem_2rem_2.75rem_3rem] items-center gap-x-1.5';
+
 /** League / group tables for the live client's Table tab, with a champion banner. */
 export function LiveStandings({
   groups,
@@ -50,44 +55,90 @@ export function LiveStandings({
             <div className="mb-2.5 text-xs font-extrabold uppercase tracking-[0.12em] text-muted-foreground">
               {groups.length > 1 ? g.label : 'League table'}
             </div>
-            <div className="flex flex-col gap-2">
-              {g.rows.map((r, i) => (
+
+            <div className="overflow-x-auto">
+              <div className="min-w-[20rem]">
+                {/* Column headers */}
                 <div
-                  key={r.teamId}
                   className={cn(
-                    'flex items-center gap-3 rounded-[13px] border bg-surface p-3',
-                    i === 0 ? 'border-accent/50' : 'border-border',
+                    COLS,
+                    'px-3 pb-1.5 text-[10px] font-extrabold uppercase tracking-[0.08em] text-muted-foreground',
                   )}
                 >
-                  <div
-                    className={cn(
-                      'mono w-6 text-center text-[17px] font-black',
-                      i === 0 ? 'text-accent' : 'text-muted-foreground',
-                    )}
-                  >
-                    {i + 1}
-                  </div>
-                  <span className="mono flex size-[34px] shrink-0 items-center justify-center rounded-[9px] bg-surface-2 text-[11px] font-extrabold">
-                    {teamCode(r.name)}
+                  <span className="text-center">#</span>
+                  <span>Team</span>
+                  <span className="text-center" title="Played">
+                    P
                   </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-[14.5px] font-extrabold">{r.name}</div>
-                    <div className="mono text-[11.5px] text-muted-foreground">
-                      {r.played}P · {r.win}W · {r.draw}D · {r.loss}L ·{' '}
-                      {r.goalDiff > 0 ? `+${r.goalDiff}` : r.goalDiff}
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="mono text-[22px] font-extrabold text-accent">{r.points}</div>
-                    <div className="text-[9px] font-bold uppercase tracking-[0.1em] text-muted-foreground">
-                      pts
-                    </div>
-                  </div>
+                  <span className="text-center" title="Won">
+                    W
+                  </span>
+                  <span className="text-center" title="Drawn">
+                    D
+                  </span>
+                  <span className="text-center" title="Lost">
+                    L
+                  </span>
+                  <span className="text-center" title="Net points (score margin)">
+                    Net
+                  </span>
+                  <span className="text-right" title="Points">
+                    Pts
+                  </span>
                 </div>
-              ))}
+
+                <div className="flex flex-col gap-1.5">
+                  {g.rows.map((r, i) => (
+                    <div
+                      key={r.teamId}
+                      className={cn(
+                        COLS,
+                        'rounded-[11px] border bg-surface px-3 py-2.5',
+                        i === 0 ? 'border-accent/50' : 'border-border',
+                      )}
+                    >
+                      <div
+                        className={cn(
+                          'mono text-center text-[15px] font-black',
+                          i === 0 ? 'text-accent' : 'text-muted-foreground',
+                        )}
+                      >
+                        {i + 1}
+                      </div>
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className="mono flex size-[30px] shrink-0 items-center justify-center rounded-[8px] bg-surface-2 text-[10.5px] font-extrabold">
+                          {teamCode(r.name)}
+                        </span>
+                        <span className="truncate text-[14px] font-extrabold">{r.name}</span>
+                      </div>
+                      <Cell>{r.played}</Cell>
+                      <Cell>{r.win}</Cell>
+                      <Cell>{r.draw}</Cell>
+                      <Cell>{r.loss}</Cell>
+                      <Cell muted>{r.goalDiff > 0 ? `+${r.goalDiff}` : r.goalDiff}</Cell>
+                      <div className="mono text-right text-[19px] font-extrabold text-accent tabular-nums">
+                        {r.points}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         ))}
+    </div>
+  );
+}
+
+function Cell({ children, muted }: { children: React.ReactNode; muted?: boolean }) {
+  return (
+    <div
+      className={cn(
+        'mono text-center text-[13.5px] font-bold tabular-nums',
+        muted ? 'text-muted-foreground' : 'text-foreground',
+      )}
+    >
+      {children}
     </div>
   );
 }

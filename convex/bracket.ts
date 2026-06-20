@@ -238,7 +238,12 @@ export type Standing = {
   points: number;
 };
 
-/** League table for a set of group matches (3 for a win, 1 for a draw). */
+/**
+ * League table for a set of group matches. Match points: 2 for a win, 1 for a
+ * draw, 0 for a loss. Teams are ranked by match points first; ties are broken by
+ * "net points" — the running margin across all of a team's matches (e.g. a 16–14
+ * win contributes +2), i.e. total points scored minus total conceded.
+ */
 export function computeStandings(teamIds: Id<'teams'>[], matches: Doc<'matches'>[]): Standing[] {
   const table = new Map<Id<'teams'>, Standing>();
   for (const id of teamIds) {
@@ -270,11 +275,11 @@ export function computeStandings(teamIds: Id<'teams'>[], matches: Doc<'matches'>
     if (sa > sb) {
       a.win++;
       b.loss++;
-      a.points += 3;
+      a.points += 2;
     } else if (sb > sa) {
       b.win++;
       a.loss++;
-      b.points += 3;
+      b.points += 2;
     } else {
       a.draw++;
       b.draw++;
@@ -285,11 +290,9 @@ export function computeStandings(teamIds: Id<'teams'>[], matches: Doc<'matches'>
   return [...table.values()]
     .map((s) => ({ ...s, goalDiff: s.goalsFor - s.goalsAgainst }))
     .sort(
-      (x, y) =>
-        y.points - x.points ||
-        y.goalDiff - x.goalDiff ||
-        y.goalsFor - x.goalsFor ||
-        y.win - x.win,
+      // Match points first, then net points (the score-margin total), then wins
+      // as a final stable tiebreaker.
+      (x, y) => y.points - x.points || y.goalDiff - x.goalDiff || y.win - x.win,
     );
 }
 
