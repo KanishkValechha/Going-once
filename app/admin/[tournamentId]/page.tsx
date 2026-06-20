@@ -2,19 +2,23 @@
 
 import { use, useState } from 'react';
 import Link from 'next/link';
-import { useQuery } from 'convex/react';
+import { useMutation, useQuery } from 'convex/react';
 import {
   ArrowLeft,
+  ArrowRight,
   Crown,
   ExternalLink,
   LayoutDashboard,
   ListOrdered,
+  Pause,
   Radio,
+  RadioTower,
   Shield,
   Swords,
   Users,
   Users2,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { api } from '@/convex/_generated/api';
 import type { Id, Tournament } from '@/types';
 import { Badge } from '@/components/ui/badge';
@@ -32,19 +36,59 @@ import { StandingsBoard } from '@/components/admin/StandingsBoard';
 import { AuctionExport } from '@/components/admin/AuctionExport';
 import { NextStepBanner, RunOrderBoard, type WorkspaceTab } from '@/components/admin/RunOrder';
 import { buildLiveUrl } from '@/helpers/live';
-import { FORMAT_LABEL, PHASE_LABEL, PHASE_VARIANT, derivePhase } from '@/helpers/tournament';
+import { FORMAT_LABEL, PHASE_LABEL, PHASE_VARIANT, derivePhase, type Progress } from '@/helpers/tournament';
+
+/**
+ * The single most useful place to send the organizer next, given how far the
+ * tournament has come: into the auction console while players are still in the
+ * pool, then on to fixtures, live matches and finally the standings.
+ */
+type Destination = { label: string; href?: string; tab?: WorkspaceTab };
+function nextDestination(p: Progress | undefined, tournamentId: string): Destination {
+  const auctionDone = !!p && p.playerCount > 0 && p.poolCount === 0;
+  if (!auctionDone) return { label: 'Go to auction', href: `/admin/${tournamentId}/auction` };
+  if (p!.matchCount === 0) return { label: 'Go to fixtures', tab: 'fixtures' };
+  if (p!.finalsCount < p!.playableCount) return { label: 'Go to matches', tab: 'fixtures' };
+  return { label: 'Go to standings', tab: 'standings' };
+}
 
 export default function TournamentHub({ params }: { params: Promise<{ tournamentId: string }> }) {
   const { tournamentId } = use(params);
   const id = tournamentId as Id<'tournaments'>;
   const tournament = useQuery(api.tournaments.get, { tournamentId: id });
   const progress = useQuery(api.tournaments.progress, { tournamentId: id });
+  const setLive = useMutation(api.tournaments.setLive);
+  const pause = useMutation(api.tournaments.pause);
   const [tab, setTab] = useState<WorkspaceTab>('overview');
+
+  async function goLive() {
+    try {
+      await setLive({ tournamentId: id });
+      toast.success("You're live — the public screen is now showing this tournament.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not go live');
+    }
+  }
+
+  async function pauseLive() {
+    try {
+      await pause({ tournamentId: id });
+      toast.success('Paused — off the live screen. Everything is saved; go live again to resume.');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not pause');
+    }
+  }
 
   if (tournament === undefined) return <Spinner label="Loading tournament…" />;
   if (tournament === null) return <p className="text-muted-foreground">Tournament not found.</p>;
 
   const phase = progress ? derivePhase(progress) : null;
+  const isLive = tournament.status === 'live';
+  const ready =
+    !!progress &&
+    progress.teamCount >= 2 &&
+    progress.playerCount >= tournament.rosterSize * progress.teamCount;
+  const dest = nextDestination(progress, tournamentId);
 
   return (
     <div className="flex flex-col gap-6">
@@ -68,11 +112,37 @@ export default function TournamentHub({ params }: { params: Promise<{ tournament
               {FORMAT_LABEL[tournament.format ?? 'round_robin']}
             </span>
           </div>
-          <Link href={`/admin/${tournamentId}/auction`}>
-            <Button size="lg" variant={tournament.status === 'live' ? 'default' : 'secondary'}>
-              <Radio className="size-4" /> Auction console
-            </Button>
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            {isLive ? (
+              <Button size="lg" variant="secondary" onClick={() => void pauseLive()}>
+                <Pause className="size-4" /> Pause
+              </Button>
+            ) : (
+              <Button
+                size="lg"
+                onClick={() => void goLive()}
+                disabled={!ready}
+                title={ready ? undefined : 'Add at least 2 teams and enough players first'}
+              >
+                <RadioTower className="size-4" /> Go live
+              </Button>
+            )}
+            {dest.href ? (
+              <Link href={dest.href}>
+                <Button size="lg" variant={isLive ? 'default' : 'secondary'}>
+                  <Radio className="size-4" /> {dest.label}
+                </Button>
+              </Link>
+            ) : (
+              <Button
+                size="lg"
+                variant={isLive ? 'default' : 'secondary'}
+                onClick={() => setTab(dest.tab!)}
+              >
+                {dest.label} <ArrowRight className="size-4" />
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 

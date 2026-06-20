@@ -312,7 +312,38 @@ export const setLive = mutation({
       }
     }
     await ctx.db.patch('tournaments', args.tournamentId, { status: 'live' });
-    await resetAuctionState(ctx, args.tournamentId);
+    // Resuming from a pause keeps the auction exactly as it was; only a genuine
+    // first go-live (nothing sold yet) clears out any stale mid-bid lot.
+    const anySold = await ctx.db
+      .query('players')
+      .withIndex('by_tournament_and_status', (q) =>
+        q.eq('tournamentId', args.tournamentId).eq('status', 'sold'),
+      )
+      .first();
+    if (anySold) {
+      await ensureAuctionState(ctx, args.tournamentId);
+    } else {
+      await resetAuctionState(ctx, args.tournamentId);
+    }
+    return null;
+  },
+});
+
+/**
+ * Take a live tournament off air without ending it. Status drops back to
+ * `draft` so the public live screen stops showing it, but every sold player,
+ * team budget and match result stays put — pressing "Go live" again resumes
+ * exactly where things left off.
+ */
+export const pause = mutation({
+  args: { tournamentId: v.id('tournaments') },
+  handler: async (ctx, args) => {
+    await requireTournamentAccess(ctx, args.tournamentId);
+    const tournament = await ctx.db.get('tournaments', args.tournamentId);
+    if (!tournament) throw new Error('Tournament not found');
+    if (tournament.status === 'live') {
+      await ctx.db.patch('tournaments', args.tournamentId, { status: 'draft' });
+    }
     return null;
   },
 });
