@@ -15,13 +15,13 @@ export default function Home() {
       <div className="flex flex-col items-center text-center">
         <Wordmark size="lg" />
         <h1 className="display mt-8 text-6xl tracking-tight sm:text-7xl">
-          Live Auction
+          Run the auction.
           <br />
-          <span className="text-accent">Control Room</span>
+          <span className="text-accent">Host the tournament.</span>
         </h1>
         <p className="mt-5 max-w-lg text-balance text-muted-foreground">
-          Run physical sports auctions in real time. Register every bid from the room and drive a shared live screen on
-          the big display.
+          Build your squads, run the live player auction, then play out the fixtures — with a shared live screen showing
+          the auction, matches and standings the whole way through.
         </p>
       </div>
 

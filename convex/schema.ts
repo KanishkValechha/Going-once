@@ -23,6 +23,17 @@ export default defineSchema({
   tournaments: defineTable({
     name: v.string(),
     status: v.union(v.literal('draft'), v.literal('live'), v.literal('completed')),
+    // The intended competition format, chosen at creation. Drives the default
+    // when fixtures are generated and the format shown on dashboard cards.
+    // Optional so tournaments created before it existed still validate.
+    format: v.optional(
+      v.union(
+        v.literal('single_elimination'),
+        v.literal('round_robin'),
+        v.literal('double_round_robin'),
+        v.literal('groups_knockout'),
+      ),
+    ),
     viewerToken: v.string(),
     defaultBudget: v.number(),
     rosterSize: v.number(),

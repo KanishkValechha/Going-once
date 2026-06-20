@@ -29,6 +29,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { downloadNodeAsPng } from '@/helpers/exportImage';
+import { teamCode } from '@/helpers/format';
 import { cn } from '@/lib/utils';
 
 type BracketFormat =
@@ -92,10 +93,18 @@ export function BracketManager({ tournamentId }: { tournamentId: Id<'tournaments
 
 function BracketGenerator({ tournamentId }: { tournamentId: Id<'tournaments'> }) {
   const generate = useMutation(api.bracket.generate);
+  const tournament = useQuery(api.tournaments.get, { tournamentId });
   const [format, setFormat] = useState<BracketFormat>('single_elimination');
   const [groupCount, setGroupCount] = useState('2');
   const [advancePerGroup, setAdvancePerGroup] = useState('2');
   const [busy, setBusy] = useState(false);
+
+  // Default to the format chosen when the tournament was created (once loaded).
+  const [syncedFormat, setSyncedFormat] = useState(false);
+  if (!syncedFormat && tournament?.format) {
+    setSyncedFormat(true);
+    setFormat(tournament.format);
+  }
 
   async function run() {
     setBusy(true);
@@ -280,14 +289,26 @@ function BracketBoard({
         </div>
       </div>
 
-      <div ref={captureRef} className="rounded-xl bg-surface p-5">
+      <div ref={captureRef} className="rounded-2xl bg-surface p-5">
         {(format === 'round_robin' || format === 'double_round_robin') && (
-          <RoundRobinView data={data} />
+          <RoundColumns matches={data.matches.filter((m) => m.stage === 'group')} />
         )}
         {format === 'single_elimination' && <KnockoutView matches={knockout} />}
         {format === 'groups_knockout' && (
           <div className="flex flex-col gap-8">
-            <GroupStageView data={data} />
+            {(data.standings.length > 0
+              ? data.standings.map((s) => s.groupIndex)
+              : [0]
+            ).map((gi) => (
+              <div key={gi}>
+                <h3 className="eyebrow mb-3">Group {String.fromCharCode(65 + gi)}</h3>
+                <RoundColumns
+                  matches={data.matches.filter(
+                    (m) => m.stage === 'group' && (m.groupIndex ?? 0) === gi,
+                  )}
+                />
+              </div>
+            ))}
             <div>
               <h3 className="eyebrow mb-3">
                 Knockout stage{' '}
@@ -305,6 +326,154 @@ function BracketBoard({
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// League / group fixtures — round columns with ± score steppers (admin entry).
+// ---------------------------------------------------------------------------
+
+function RoundColumns({ matches }: { matches: BracketMatch[] }) {
+  if (matches.length === 0) return null;
+  const rounds = [...new Set(matches.map((m) => m.round))].sort((a, b) => a - b);
+  return (
+    <div className="flex gap-4 overflow-x-auto pb-2">
+      {rounds.map((r) => {
+        const roundMatches = matches.filter((m) => m.round === r).sort((a, b) => a.slot - b.slot);
+        return (
+          <div key={r} className="flex w-[280px] flex-none flex-col gap-2.5">
+            <p className="eyebrow px-0.5">Round {r + 1}</p>
+            {roundMatches.map((m) => (
+              <FixtureStepperCard key={m._id} match={m} />
+            ))}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** A single group fixture with ± steppers per team and a mark-final action. */
+function FixtureStepperCard({ match }: { match: BracketMatch }) {
+  const recordScore = useMutation(api.bracket.recordScore);
+  const [a, setA] = useState(match.scoreA ?? 0);
+  const [b, setB] = useState(match.scoreB ?? 0);
+  const [saving, setSaving] = useState(false);
+
+  // Re-sync local steppers when the saved result changes underneath us.
+  const [synced, setSynced] = useState(`${match.scoreA}-${match.scoreB}`);
+  const key = `${match.scoreA}-${match.scoreB}`;
+  if (key !== synced) {
+    setSynced(key);
+    setA(match.scoreA ?? 0);
+    setB(match.scoreB ?? 0);
+  }
+
+  const done = match.status === 'done';
+  const aWon = done && match.winnerTeamId === match.teamAId;
+  const bWon = done && match.winnerTeamId === match.teamBId;
+
+  async function save() {
+    setSaving(true);
+    try {
+      await recordScore({ matchId: match._id, scoreA: a, scoreB: b });
+      toast.success('Result saved');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not save result');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div
+      className={cn(
+        'rounded-[13px] border bg-surface-2/40 p-3.5',
+        done ? 'border-border' : 'border-border',
+      )}
+    >
+      <div className="mb-2.5 flex items-center justify-between">
+        <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-muted-foreground/70">
+          {match.label ?? `Round ${match.round + 1}`}
+        </span>
+        <span
+          className={cn(
+            'rounded-full px-2 py-0.5 text-[9.5px] font-extrabold uppercase tracking-[0.06em]',
+            done ? 'bg-border text-foreground' : 'bg-surface-2 text-muted-foreground',
+          )}
+        >
+          {done ? 'Final' : 'Upcoming'}
+        </span>
+      </div>
+      <StepperRow
+        name={match.teamAName}
+        code={match.teamAName}
+        score={a}
+        won={aWon}
+        onMinus={() => setA((v) => Math.max(0, v - 1))}
+        onPlus={() => setA((v) => v + 1)}
+      />
+      <div className="mt-2">
+        <StepperRow
+          name={match.teamBName}
+          code={match.teamBName}
+          score={b}
+          won={bWon}
+          onMinus={() => setB((v) => Math.max(0, v - 1))}
+          onPlus={() => setB((v) => v + 1)}
+        />
+      </div>
+      <Button
+        variant={done ? 'secondary' : 'default'}
+        size="sm"
+        className="mt-3 w-full"
+        disabled={saving}
+        onClick={() => void save()}
+      >
+        {done ? 'Update result' : 'Mark final'}
+      </Button>
+    </div>
+  );
+}
+
+function StepperRow({
+  name,
+  code,
+  score,
+  won,
+  onMinus,
+  onPlus,
+}: {
+  name: string | null;
+  code: string | null;
+  score: number;
+  won: boolean;
+  onMinus: () => void;
+  onPlus: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <span className="mono flex size-6 shrink-0 items-center justify-center rounded-md bg-surface-2 text-[8.5px] font-extrabold">
+        {code ? teamCode(code) : '—'}
+      </span>
+      <span className={cn('flex-1 truncate text-[13px]', won ? 'font-extrabold' : 'font-medium')}>
+        {name ?? 'TBD'}
+      </span>
+      <div className="flex items-center gap-1.5">
+        <button onClick={onMinus} className={STEP_BTN} aria-label="Decrease">
+          –
+        </button>
+        <span className={cn('mono w-6 text-center text-[17px] font-extrabold', won && 'text-accent')}>
+          {score}
+        </span>
+        <button onClick={onPlus} className={STEP_BTN} aria-label="Increase">
+          +
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const STEP_BTN =
+  'flex size-6 items-center justify-center rounded-md border border-input bg-surface-2 text-sm font-extrabold leading-none text-foreground/80 transition-colors hover:text-foreground';
 
 /** Champion = winner of the single match that has no `nextMatchId` (the final). */
 function findChampion(data: ViewData): string | null {
@@ -399,137 +568,6 @@ function KnockoutTeamLine({
       {score !== undefined && (
         <span className="tnum shrink-0 font-semibold tabular-nums">{score}</span>
       )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Group stage / round robin rendering.
-// ---------------------------------------------------------------------------
-
-function RoundRobinView({ data }: { data: ViewData }) {
-  const fixtures = data.matches.filter((m) => m.stage === 'group');
-  return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
-      <div>
-        <h3 className="eyebrow mb-3">Standings</h3>
-        {data.standings[0] && <StandingsTable rows={data.standings[0].rows} />}
-      </div>
-      <div>
-        <h3 className="eyebrow mb-3">Fixtures</h3>
-        <FixtureList matches={fixtures} />
-      </div>
-    </div>
-  );
-}
-
-function GroupStageView({ data }: { data: ViewData }) {
-  const groups = data.standings;
-  return (
-    <div className="grid gap-6 md:grid-cols-2">
-      {groups.map((g) => {
-        const fixtures = data.matches.filter(
-          (m) => m.stage === 'group' && (m.groupIndex ?? 0) === g.groupIndex,
-        );
-        return (
-          <div key={g.groupIndex} className="rounded-lg border border-border bg-surface-2 p-4">
-            <h3 className="eyebrow mb-3">{g.label}</h3>
-            <StandingsTable rows={g.rows} highlight={data.bracket.advancePerGroup ?? 0} />
-            <h4 className="eyebrow mt-4 mb-2 text-muted-foreground/70">Fixtures</h4>
-            <FixtureList matches={fixtures} compact />
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function StandingsTable({ rows, highlight = 0 }: { rows: StandingRow[]; highlight?: number }) {
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="text-left text-xs text-muted-foreground">
-            <th className="py-1 pr-2 font-medium">#</th>
-            <th className="py-1 pr-2 font-medium">Team</th>
-            <th className="px-1 py-1 text-center font-medium" title="Played">P</th>
-            <th className="px-1 py-1 text-center font-medium" title="Won">W</th>
-            <th className="px-1 py-1 text-center font-medium" title="Drawn">D</th>
-            <th className="px-1 py-1 text-center font-medium" title="Lost">L</th>
-            <th className="px-1 py-1 text-center font-medium" title="Goal difference">GD</th>
-            <th className="px-1 py-1 text-center font-medium" title="Points">Pts</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r, i) => (
-            <tr
-              key={r.teamId}
-              className={cn(
-                'border-t border-border/60',
-                highlight > 0 && i < highlight && 'bg-positive/10',
-              )}
-            >
-              <td className="py-1.5 pr-2 text-muted-foreground tabular-nums">{i + 1}</td>
-              <td className="py-1.5 pr-2 font-medium">{r.name}</td>
-              <td className="px-1 py-1.5 text-center tabular-nums">{r.played}</td>
-              <td className="px-1 py-1.5 text-center tabular-nums">{r.win}</td>
-              <td className="px-1 py-1.5 text-center tabular-nums">{r.draw}</td>
-              <td className="px-1 py-1.5 text-center tabular-nums">{r.loss}</td>
-              <td className="px-1 py-1.5 text-center tabular-nums">
-                {r.goalDiff > 0 ? `+${r.goalDiff}` : r.goalDiff}
-              </td>
-              <td className="px-1 py-1.5 text-center font-semibold tabular-nums">{r.points}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function FixtureList({ matches, compact }: { matches: BracketMatch[]; compact?: boolean }) {
-  const rounds = [...new Set(matches.map((m) => m.round))].sort((a, b) => a - b);
-  return (
-    <div className="flex flex-col gap-3">
-      {rounds.map((r) => (
-        <div key={r}>
-          {!compact && (
-            <p className="mb-1 text-xs font-semibold text-muted-foreground">Round {r + 1}</p>
-          )}
-          <div className="flex flex-col gap-1.5">
-            {matches
-              .filter((m) => m.round === r)
-              .sort((a, b) => a.slot - b.slot)
-              .map((m) => (
-                <FixtureRow key={m._id} match={m} />
-              ))}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function FixtureRow({ match }: { match: BracketMatch }) {
-  return (
-    <div className="flex items-center gap-2 rounded-md bg-surface px-2.5 py-1.5 text-sm">
-      <span
-        className={cn(
-          'flex-1 truncate text-right',
-          match.winnerTeamId === match.teamAId && 'font-semibold text-positive',
-        )}
-      >
-        {match.teamAName ?? '—'}
-      </span>
-      <ScoreEntry match={match} inline />
-      <span
-        className={cn(
-          'flex-1 truncate',
-          match.winnerTeamId === match.teamBId && 'font-semibold text-positive',
-        )}
-      >
-        {match.teamBName ?? '—'}
-      </span>
     </div>
   );
 }

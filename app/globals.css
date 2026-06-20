@@ -4,44 +4,45 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /*
-  Going Once — refined, calm dark theme with a confident indigo accent.
-  Deep neutral slate surfaces, off-white text, restrained contrast.
+  Going Once — warm near-black broadcast theme with a gold accent.
+  Off-white text, charcoal surfaces, JetBrains Mono for every number.
 */
 :root {
   color-scheme: dark;
-  --radius: 0.7rem;
+  --radius: 0.85rem;
 
-  --background: oklch(0.165 0.012 264);
-  --foreground: oklch(0.96 0.004 264);
-  --surface: oklch(0.205 0.014 264);
-  --surface-2: oklch(0.255 0.016 264);
-  --card: oklch(0.205 0.014 264);
-  --card-foreground: oklch(0.96 0.004 264);
-  --popover: oklch(0.225 0.015 264);
-  --popover-foreground: oklch(0.96 0.004 264);
+  --background: #121211;
+  --foreground: #efece5;
+  --surface: #1b1a18;
+  --surface-2: #232220;
+  --card: #1b1a18;
+  --card-foreground: #efece5;
+  --popover: #1b1a18;
+  --popover-foreground: #efece5;
 
-  --muted: oklch(0.255 0.016 264);
-  --muted-foreground: oklch(0.7 0.018 264);
+  --muted: #232220;
+  --muted-foreground: #8f8b82;
 
-  --border: oklch(0.3 0.016 264);
-  --input: oklch(0.3 0.016 264);
-  --ring: oklch(0.62 0.17 252);
+  --border: #2c2a26;
+  --input: #38342e;
+  --ring: #d6a043;
 
-  /* Signature accent — calm, confident blue. */
-  --accent: oklch(0.62 0.17 252);
-  --accent-foreground: oklch(0.99 0 0);
-  --primary: oklch(0.62 0.17 252);
-  --primary-foreground: oklch(0.99 0 0);
-  --secondary: oklch(0.255 0.016 264);
-  --secondary-foreground: oklch(0.96 0.004 264);
+  /* Signature accent — auction-house gold, used for numbers and live cues. */
+  --accent: #d6a043;
+  --accent-foreground: #1b1a18;
+  /* Primary actions are confident off-white with dark ink. */
+  --primary: #efece5;
+  --primary-foreground: #1b1a18;
+  --secondary: #232220;
+  --secondary-foreground: #efece5;
 
-  --positive: oklch(0.74 0.16 155);
-  --positive-foreground: oklch(0.16 0.04 155);
-  --destructive: oklch(0.66 0.2 22);
-  --destructive-foreground: oklch(0.99 0 0);
-  --warning: oklch(0.79 0.15 70);
-  --warning-foreground: oklch(0.24 0.05 70);
-  --live: oklch(0.68 0.2 22);
+  --positive: #57b06f;
+  --positive-foreground: #10140f;
+  --destructive: #d2562f;
+  --destructive-foreground: #fbeee7;
+  --warning: #d99a3c;
+  --warning-foreground: #221704;
+  --live: #d6a043;
 }
 
 @theme inline {
@@ -85,6 +86,10 @@
   --animate-bid-pop: bid-pop 0.45s cubic-bezier(0.22, 1, 0.36, 1);
   --animate-rise: rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
   --animate-live-pulse: live-pulse 1.6s ease-in-out infinite;
+  --animate-slam: slam 0.5s cubic-bezier(0.2, 1.3, 0.5, 1) both;
+  --animate-ring-pulse: ring-pulse 1.8s ease-out infinite;
+  --animate-sheet: sheet 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-blink: blink 1.1s ease-in-out infinite;
 }
 
 @layer base {
@@ -137,6 +142,12 @@
     font-weight: 700;
     color: var(--muted-foreground);
   }
+
+  /* Monospace stat figures — scores, points, budgets, team codes. */
+  .mono {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-variant-numeric: tabular-nums;
+  }
 }
 
 @keyframes bid-pop {
@@ -175,5 +186,56 @@
   50% {
     opacity: 0.65;
     box-shadow: 0 0 0 5px color-mix(in oklch, var(--live) 0%, transparent);
+  }
+}
+
+/* The auctioneer's gavel coming down — used for the SOLD / UNSOLD stamp. */
+@keyframes slam {
+  0% {
+    transform: scale(2.2) rotate(-10deg);
+    opacity: 0;
+  }
+  40% {
+    transform: scale(0.9) rotate(-7deg);
+    opacity: 1;
+  }
+  58% {
+    transform: scale(1.04) rotate(-7deg);
+  }
+  100% {
+    transform: scale(1) rotate(-7deg);
+    opacity: 1;
+  }
+}
+
+/* Expanding ring around the lot avatar while bidding is open. */
+@keyframes ring-pulse {
+  0% {
+    transform: scale(0.75);
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(1.7);
+    opacity: 0;
+  }
+}
+
+/* Bottom-sheet slide-up (roster overlay on the live client). */
+@keyframes sheet {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
   }
 }

@@ -1,38 +1,42 @@
-import { Gavel } from 'lucide-react';
-
 import { cn } from '@/lib/utils';
 
-/** The "Going Once" broadcast wordmark — gavel mark + condensed logotype. */
+/** The "Going Once" broadcast wordmark — mono "GO" mark + condensed logotype. */
 export function Wordmark({
-  sub,
+  sub = 'AUCTION · LEAGUES · LIVE',
   size = 'sm',
   className,
 }: {
-  sub?: string;
+  sub?: string | null;
   size?: 'sm' | 'lg';
   className?: string;
 }) {
+  const lg = size === 'lg';
   return (
-    <div className={cn('flex items-center gap-2.5', className)}>
+    <div className={cn('flex items-center gap-2.5 select-none', className)}>
       <span
         className={cn(
-          'flex items-center justify-center rounded-lg bg-accent text-accent-foreground',
-          size === 'sm' ? 'size-7' : 'size-10',
+          'mono flex items-center justify-center rounded-[9px] bg-foreground font-black text-background',
+          lg ? 'size-11 text-base' : 'size-[34px] text-[13px]',
         )}
       >
-        <Gavel className={size === 'sm' ? 'size-4' : 'size-5'} />
+        GO
       </span>
       <div className="leading-none">
         <span
           className={cn(
-            'display block tracking-wide',
-            size === 'sm' ? 'text-lg' : 'text-2xl',
+            'block font-black tracking-[0.14em]',
+            lg ? 'text-2xl' : 'text-base',
           )}
         >
-          Going Once
+          GOING ONCE
         </span>
         {sub && (
-          <span className="text-[0.6rem] font-semibold uppercase tracking-[0.28em] text-muted-foreground">
+          <span
+            className={cn(
+              'mt-[3px] block font-semibold uppercase text-muted-foreground',
+              lg ? 'text-[11px] tracking-[0.34em]' : 'text-[9.5px] tracking-[0.32em]',
+            )}
+          >
             {sub}
           </span>
         )}

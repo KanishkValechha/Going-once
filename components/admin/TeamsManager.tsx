@@ -2,12 +2,11 @@
 
 import { useRef, useState } from 'react';
 import { useMutation, useQuery } from 'convex/react';
-import { ImagePlus, Pencil, Plus, Shield, Trash2 } from 'lucide-react';
+import { ImagePlus, Pencil, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/convex/_generated/api';
 import type { Id, TeamWithLogo } from '@/types';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Dialog,
   DialogContent,
@@ -19,11 +18,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { AvatarImage } from '@/components/ui/avatar-image';
-import { formatAmount } from '@/helpers/format';
+import { formatAmount, teamCode } from '@/helpers/format';
 import { uploadFile } from '@/helpers/upload';
+import { cn } from '@/lib/utils';
 
 export function TeamsManager({ tournamentId }: { tournamentId: Id<'tournaments'> }) {
   const teams = useQuery(api.teams.listByTournament, { tournamentId });
+  const tournament = useQuery(api.tournaments.get, { tournamentId });
   const create = useMutation(api.teams.create);
   const remove = useMutation(api.teams.remove);
   const generateUploadUrl = useMutation(api.teams.generateUploadUrl);
@@ -33,6 +34,9 @@ export function TeamsManager({ tournamentId }: { tournamentId: Id<'tournaments'>
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const [editing, setEditing] = useState<TeamWithLogo | null>(null);
+
+  const cap = tournament?.defaultBudget ?? 0;
+  const rosterSize = tournament?.rosterSize ?? 0;
 
   async function submit() {
     if (!name.trim()) return;
@@ -62,16 +66,16 @@ export function TeamsManager({ tournamentId }: { tournamentId: Id<'tournaments'>
   }
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[20rem_1fr]">
-      <Card className="h-fit lg:sticky lg:top-24">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Shield className="size-4 text-accent" /> Add team
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
+    <div className="flex flex-col gap-5">
+      {/* Add a team — inline form */}
+      <div className="rounded-2xl border border-border bg-surface p-5 sm:p-6">
+        <div className="text-[15px] font-extrabold">Add a team</div>
+        <div className="mb-4 mt-1 text-[12.5px] text-muted-foreground">
+          Enter each squad&apos;s name, an optional purse and logo.
+        </div>
+        <div className="grid items-end gap-3 sm:grid-cols-[1fr_10rem_auto]">
           <div>
-            <Label htmlFor="team-name">Team name</Label>
+            <Label htmlFor="team-name">Name</Label>
             <Input
               id="team-name"
               value={name}
@@ -81,67 +85,93 @@ export function TeamsManager({ tournamentId }: { tournamentId: Id<'tournaments'>
             />
           </div>
           <div>
-            <Label htmlFor="team-budget">Budget</Label>
+            <Label htmlFor="team-budget">Purse (optional)</Label>
             <Input
               id="team-budget"
               type="number"
               value={budget}
               onChange={(e) => setBudget(e.target.value)}
-              placeholder="Tournament default"
+              placeholder={cap ? formatAmount(cap) : 'Default'}
+              className="mono"
             />
           </div>
-          <div>
-            <Label>
-              <ImagePlus className="size-3.5" /> Logo
-            </Label>
-            <Input ref={fileRef} type="file" accept="image/*" />
-          </div>
           <Button onClick={() => void submit()} disabled={busy || !name.trim()}>
-            <Plus className="size-4" /> {busy ? 'Adding…' : 'Add team'}
+            <Plus className="size-4" /> {busy ? 'Adding…' : 'Add'}
           </Button>
-        </CardContent>
-      </Card>
-
-      <div>
-        {teams === undefined ? (
-          <Spinner />
-        ) : teams.length === 0 ? (
-          <EmptyHint label="No teams yet — add your first on the left." />
-        ) : (
-          <div className="grid gap-3 sm:grid-cols-2">
-            {teams.map((t) => (
-              <Card key={t._id} className="group flex items-center gap-3 p-3">
-                <AvatarImage src={t.logoUrl} name={t.name} className="size-12 rounded-lg text-xl" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-semibold">{t.name}</p>
-                  <p className="tnum text-sm text-muted-foreground">
-                    {formatAmount(t.remainingBudget)} left · {t.playersWon} won
-                  </p>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="text-muted-foreground opacity-0 transition-opacity hover:text-accent group-hover:opacity-100"
-                  onClick={() => setEditing(t)}
-                  aria-label={`Edit ${t.name}`}
-                >
-                  <Pencil className="size-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
-                  onClick={() => {
-                    if (confirm(`Remove ${t.name}?`)) void remove({ teamId: t._id });
-                  }}
-                >
-                  <Trash2 className="size-4" />
-                </Button>
-              </Card>
-            ))}
-          </div>
-        )}
+        </div>
+        <label className="mt-3 flex w-fit cursor-pointer items-center gap-2 text-xs text-muted-foreground hover:text-foreground">
+          <ImagePlus className="size-3.5" /> Add a logo
+          <Input ref={fileRef} type="file" accept="image/*" className="h-8 w-44 py-1 text-xs" />
+        </label>
       </div>
+
+      {teams === undefined ? (
+        <Spinner />
+      ) : teams.length === 0 ? (
+        <EmptyHint label="No teams yet — add your squads above to get started." />
+      ) : (
+        <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
+          {teams.map((t) => {
+            const spent = Math.max(0, cap - t.remainingBudget);
+            const spentPct = cap > 0 ? Math.min(100, (spent / cap) * 100) : 0;
+            return (
+              <div key={t._id} className="overflow-hidden rounded-2xl border border-border bg-surface">
+                <div className="flex items-center gap-3 border-b border-border p-4">
+                  <AvatarImage
+                    src={t.logoUrl}
+                    name={t.name}
+                    className="mono size-10 rounded-[11px] text-[13px] font-extrabold"
+                    monogramClassName="text-foreground"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate font-extrabold">{t.name}</div>
+                    <div className="mono text-[11.5px] text-muted-foreground">{teamCode(t.name)}</div>
+                  </div>
+                  <button
+                    onClick={() => setEditing(t)}
+                    className="p-1 text-muted-foreground transition-colors hover:text-accent"
+                    aria-label={`Edit ${t.name}`}
+                  >
+                    <Pencil className="size-4" />
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (confirm(`Remove ${t.name}?`)) void remove({ teamId: t._id });
+                    }}
+                    className="p-1 text-muted-foreground transition-colors hover:text-destructive"
+                    aria-label={`Remove ${t.name}`}
+                  >
+                    <Trash2 className="size-4" />
+                  </button>
+                </div>
+                <div className="p-4">
+                  <div className="mb-1.5 flex items-center justify-between text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground">
+                    <span>Points left</span>
+                    <span>
+                      {t.playersWon}
+                      {rosterSize ? `/${rosterSize}` : ''} players
+                    </span>
+                  </div>
+                  <div className="mono mb-2.5 text-[22px] font-extrabold text-accent">
+                    {formatAmount(t.remainingBudget)}
+                  </div>
+                  <div className="h-1.5 overflow-hidden rounded-full bg-surface-2">
+                    <div
+                      className="h-full rounded-full bg-foreground"
+                      style={{ width: `${spentPct}%` }}
+                    />
+                  </div>
+                  {cap > 0 && (
+                    <div className="mono mt-1.5 text-[11px] text-muted-foreground/80">
+                      {formatAmount(spent)} spent of {formatAmount(cap)}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       <EditTeamDialog team={editing} onClose={() => setEditing(null)} />
     </div>
@@ -153,7 +183,6 @@ function EditTeamDialog({ team, onClose }: { team: TeamWithLogo | null; onClose:
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
 
-  // Sync local form state whenever a different team is opened for editing.
   const [syncedId, setSyncedId] = useState<Id<'teams'> | null>(null);
   if (team && team._id !== syncedId) {
     setSyncedId(team._id);
@@ -205,8 +234,12 @@ function EditTeamDialog({ team, onClose }: { team: TeamWithLogo | null; onClose:
 
 export function EmptyHint({ label }: { label: string }) {
   return (
-    <Card className="flex items-center justify-center border-dashed py-14 text-center text-sm text-muted-foreground">
+    <div
+      className={cn(
+        'flex items-center justify-center rounded-2xl border border-dashed border-input bg-surface px-5 py-12 text-center text-sm text-muted-foreground',
+      )}
+    >
       {label}
-    </Card>
+    </div>
   );
 }
